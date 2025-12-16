@@ -1,0 +1,94 @@
+[package]
+name = "vox-ai"
+version = "1.0.0"
+description = "WaveType - Voice to Text Desktop Application"
+authors = ["JohUniq"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/johuniq/WaveType"
+readme = "README.md"
+keywords = ["voice", "speech-to-text", "transcription", "whisper", "tauri"]
+categories = ["multimedia::audio"]
+rust-version = "1.70"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "vox_ai_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-store = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+env_logger = "0.11"
+
+# Audio capture
+cpal = "0.15"
+
+# OS-level input simulation (for text injection)
+enigo = "0.3"
+
+# Async runtime utilities
+tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
+
+# For downloading AI models (using rustls to avoid openssl dependency)
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+futures-util = "0.3"
+
+# For model/config paths
+dirs = "5"
+
+# SQLite database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Whisper speech-to-text
+whisper-rs = "0.12"
+
+# Audio processing
+hound = "3.5"
+
+# Byte order for audio conversion
+byteorder = "1.5"
+
+# UUID for unique identifiers
+uuid = { version = "1", features = ["v4"] }
+
+# Production profile optimizations
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+incremental = false
+
+# Development profile
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true
+
+# Release with debug symbols for profiling
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+strip = false
+
