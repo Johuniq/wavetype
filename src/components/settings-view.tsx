@@ -173,7 +173,12 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       if (key === " ") key = "Space";
       else if (key.length === 1) key = key.toUpperCase();
       else if (key.startsWith("Arrow")) key = key;
-      else if (key === "Control" || key === "Shift" || key === "Alt" || key === "Meta") {
+      else if (
+        key === "Control" ||
+        key === "Shift" ||
+        key === "Alt" ||
+        key === "Meta"
+      ) {
         // Don't record modifier-only keys
         return;
       }
@@ -270,7 +275,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               <Label>Push to Talk Key</Label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                  {recordingPushToTalk ? "Press any key..." : settings.pushToTalkKey}
+                  {recordingPushToTalk
+                    ? "Press any key..."
+                    : settings.pushToTalkKey}
                 </code>
                 <Button
                   variant="outline"

@@ -161,36 +161,20 @@ export async function factoryReset(): Promise<void> {
 }
 
 /**
- * Download data as file using Tauri's save dialog
+ * Download data as file
  */
-export async function downloadFile(
+export function downloadFile(
   content: string,
   filename: string,
-  _mimeType: string = "application/json"
+  mimeType: string = "application/json"
 ) {
-  try {
-    // Try to use Tauri's save dialog
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-
-    const filePath = await save({
-      defaultPath: filename,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-
-    if (filePath) {
-      await writeTextFile(filePath, content);
-    }
-  } catch {
-    // Fallback to browser download method
-    const blob = new Blob([content], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
