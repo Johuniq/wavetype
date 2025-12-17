@@ -46,6 +46,35 @@ pub struct WhisperModel {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LicenseData {
+    pub license_key: Option<String>,
+    pub activation_id: Option<String>,
+    pub status: String,
+    pub customer_email: Option<String>,
+    pub customer_name: Option<String>,
+    pub expires_at: Option<String>,
+    pub is_activated: bool,
+    pub last_validated_at: Option<String>,
+    pub trial_started_at: Option<String>,
+}
+
+impl Default for LicenseData {
+    fn default() -> Self {
+        Self {
+            license_key: None,
+            activation_id: None,
+            status: "inactive".to_string(),
+            customer_email: None,
+            customer_name: None,
+            expires_at: None,
+            is_activated: false,
+            last_validated_at: None,
+            trial_started_at: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppState {
     pub is_first_launch: bool,
     pub setup_complete: bool,
@@ -147,6 +176,31 @@ impl Database {
             [],
         )?;
 
+        // License table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS license (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                license_key TEXT,
+                activation_id TEXT,
+                status TEXT NOT NULL DEFAULT 'inactive',
+                customer_email TEXT,
+                customer_name TEXT,
+                expires_at TEXT,
+                is_activated INTEGER NOT NULL DEFAULT 0,
+                last_validated_at TEXT,
+                trial_started_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+
+        // Migration: add trial_started_at column if it doesn't exist
+        let _ = conn.execute(
+            "ALTER TABLE license ADD COLUMN trial_started_at TEXT",
+            [],
+        );
+
         Ok(())
     }
 
@@ -162,6 +216,12 @@ impl Database {
         // Insert default app state if not exists
         conn.execute(
             "INSERT OR IGNORE INTO app_state (id) VALUES (1)",
+            [],
+        )?;
+
+        // Insert default license record if not exists
+        conn.execute(
+            "INSERT OR IGNORE INTO license (id) VALUES (1)",
             [],
         )?;
 
@@ -422,6 +482,80 @@ impl Database {
     pub fn delete_transcription(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM transcription_history WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // License operations
+    pub fn get_license(&self) -> Result<LicenseData> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT license_key, activation_id, status, customer_email, customer_name, 
+                    expires_at, is_activated, last_validated_at, trial_started_at
+             FROM license WHERE id = 1",
+            [],
+            |row| {
+                Ok(LicenseData {
+                    license_key: row.get(0)?,
+                    activation_id: row.get(1)?,
+                    status: row.get(2)?,
+                    customer_email: row.get(3)?,
+                    customer_name: row.get(4)?,
+                    expires_at: row.get(5)?,
+                    is_activated: row.get::<_, i32>(6)? != 0,
+                    last_validated_at: row.get(7)?,
+                    trial_started_at: row.get(8)?,
+                })
+            },
+        )
+    }
+
+    pub fn save_license(&self, license: &LicenseData) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE license SET 
+                license_key = ?1,
+                activation_id = ?2,
+                status = ?3,
+                customer_email = ?4,
+                customer_name = ?5,
+                expires_at = ?6,
+                is_activated = ?7,
+                last_validated_at = ?8,
+                trial_started_at = ?9,
+                updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1",
+            params![
+                license.license_key,
+                license.activation_id,
+                license.status,
+                license.customer_email,
+                license.customer_name,
+                license.expires_at,
+                license.is_activated as i32,
+                license.last_validated_at,
+                license.trial_started_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_license(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE license SET 
+                license_key = NULL,
+                activation_id = NULL,
+                status = 'inactive',
+                customer_email = NULL,
+                customer_name = NULL,
+                expires_at = NULL,
+                is_activated = 0,
+                last_validated_at = NULL,
+                trial_started_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1",
+            [],
+        )?;
         Ok(())
     }
 }

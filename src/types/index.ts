@@ -47,6 +47,29 @@ export type ModelStatus =
   | "ready"
   | "error";
 
+// License status
+export type LicenseStatus =
+  | "active"
+  | "inactive"
+  | "expired"
+  | "revoked"
+  | "disabled"
+  | "invalid"
+  | "not_activated"
+  | "activation_limit";
+
+// License data
+export interface LicenseData {
+  licenseKey: string | null;
+  activationId: string | null;
+  status: LicenseStatus;
+  customerEmail: string | null;
+  customerName: string | null;
+  expiresAt: string | null;
+  isActivated: boolean;
+  lastValidatedAt: string | null;
+}
+
 // App state
 export interface AppState {
   // Setup flow

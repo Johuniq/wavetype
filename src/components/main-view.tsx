@@ -1,4 +1,5 @@
 import { HistoryView } from "@/components/history-view";
+import { LicenseView } from "@/components/license-view";
 import { Logo } from "@/components/logo";
 import { SettingsView } from "@/components/settings-view";
 import { TranscribeView } from "@/components/transcribe-view";
@@ -22,8 +23,10 @@ import { useAppStore } from "@/store";
 import type { RecordingStatus } from "@/types";
 import {
   AlertCircle,
+  Clock,
   FileAudio,
   History,
+  Key,
   Loader2,
   Mic,
   Settings,
@@ -36,7 +39,11 @@ let hotkeyListenersSetup = false;
 let lastHotkeyPressTime = 0;
 const HOTKEY_DEBOUNCE_MS = 100;
 
-export function MainView() {
+interface MainViewProps {
+  trialDaysRemaining?: number;
+}
+
+export function MainView({ trialDaysRemaining }: MainViewProps) {
   const {
     recordingStatus,
     setRecordingStatus,
@@ -55,6 +62,7 @@ export function MainView() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showTranscribe, setShowTranscribe] = useState(false);
+  const [showLicense, setShowLicense] = useState(false);
 
   // Refs to track recording state for hotkey handlers
   const recordingStatusRef = useRef(recordingStatus);
@@ -350,6 +358,11 @@ export function MainView() {
     return <TranscribeView onClose={() => setShowTranscribe(false)} />;
   }
 
+  // Show license view
+  if (showLicense) {
+    return <LicenseView onClose={() => setShowLicense(false)} />;
+  }
+
   // Show loading state while model is loading
   if (isLoadingModel) {
     return (
@@ -374,7 +387,7 @@ export function MainView() {
         }
       />
       <div className="flex items-center justify-between">
-        <Logo size="sm" />
+        <Logo size="sm" showText={false} />
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -398,6 +411,15 @@ export function MainView() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
+            onClick={() => setShowLicense(true)}
+            title="License"
+          >
+            <Key className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setShowSettings(true)}
             title="Settings"
           >
@@ -405,6 +427,27 @@ export function MainView() {
           </Button>
         </div>
       </div>
+
+      {/* Trial banner */}
+      {trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
+        <div className="mt-2 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-amber-500" />
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              Trial: {trialDaysRemaining} day
+              {trialDaysRemaining !== 1 ? "s" : ""} remaining
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+            onClick={() => setShowLicense(true)}
+          >
+            Upgrade
+          </Button>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col items-center justify-center">
         <button

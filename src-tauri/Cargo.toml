@@ -50,7 +50,7 @@ enigo = "0.3"
 tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
 
 # For downloading AI models (using rustls to avoid openssl dependency)
-reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls", "json"] }
 futures-util = "0.3"
 
 # For model/config paths
@@ -58,6 +58,12 @@ dirs = "5"
 
 # SQLite database
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Date/time handling for license expiration
+chrono = { version = "0.4", features = ["serde"] }
+
+# Hostname for device identification
+hostname = "0.4"
 
 # Whisper speech-to-text
 whisper-rs = "0.12"
