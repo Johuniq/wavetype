@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { transcribeFile } from "@/lib/voice-api";
+import { useAppStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ interface TranscribeViewProps {
 }
 
 export function TranscribeView({ onClose }: TranscribeViewProps) {
+  const { settings } = useAppStore();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -63,7 +65,10 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
     setTranscription("");
 
     try {
-      const text = await transcribeFile(selectedFile);
+      const text = await transcribeFile(
+        selectedFile,
+        settings.postProcessingEnabled
+      );
       setTranscription(text);
     } catch (err) {
       console.error("Transcription failed:", err);

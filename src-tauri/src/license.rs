@@ -7,7 +7,7 @@ use log::{info, warn, error};
 const POLAR_API_BASE: &str = "https://api.polar.sh/v1/customer-portal/license-keys";
 
 // Your Polar organization ID - REPLACE WITH YOUR ACTUAL ORG ID
-const POLAR_ORG_ID: &str = "YOUR_POLAR_ORGANIZATION_ID";
+const POLAR_ORG_ID: &str = "polar_oat_2wTM6MLdEFsJd8UWaSROeNGBT8tJ8UCmfVQXk4f2UXc";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseInfo {

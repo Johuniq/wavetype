@@ -19,8 +19,8 @@ impl TextInjector {
             return Ok(());
         }
 
-        // Small delay to ensure focus is on the target window
-        thread::sleep(Duration::from_millis(100));
+        // Minimal delay to ensure focus is on the target window
+        thread::sleep(Duration::from_millis(30));
 
         // Type the text
         self.enigo

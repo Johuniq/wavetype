@@ -55,8 +55,15 @@ export async function recordAndTranscribe(): Promise<string> {
   return await invoke<string>("record_and_transcribe");
 }
 
-export async function transcribeFile(filePath: string): Promise<string> {
-  return await invoke<string>("transcribe_file", { filePath });
+export async function transcribeFile(
+  filePath: string,
+  enablePostProcessing: boolean = true
+): Promise<string> {
+  let text = await invoke<string>("transcribe_file", { filePath });
+  if (enablePostProcessing && text) {
+    text = await postProcessText(text);
+  }
+  return text;
 }
 
 // ============================================
@@ -100,6 +107,14 @@ export async function onDownloadProgress(
 }
 
 // ============================================
+// Post-Processing API
+// ============================================
+
+export async function postProcessText(text: string): Promise<string> {
+  return await invoke<string>("post_process_text", { text });
+}
+
+// ============================================
 // Text Injection API
 // ============================================
 
@@ -118,13 +133,15 @@ export interface VoiceToTextOptions {
   onTranscriptionComplete?: (text: string) => void;
   onError?: (error: string) => void;
   injectToActiveWindow?: boolean;
+  enablePostProcessing?: boolean;
 }
 
 /**
  * Complete voice-to-text flow:
  * 1. Stop recording
  * 2. Transcribe audio
- * 3. Optionally inject text to active cursor
+ * 3. Post-process text (if enabled)
+ * 4. Optionally inject text to active cursor
  */
 export async function completeVoiceToText(
   options: VoiceToTextOptions = {}
@@ -134,7 +151,12 @@ export async function completeVoiceToText(
     options.onTranscriptionStart?.();
 
     // Stop recording and transcribe
-    const text = await recordAndTranscribe();
+    let text = await recordAndTranscribe();
+
+    // Apply post-processing if enabled
+    if (options.enablePostProcessing && text) {
+      text = await postProcessText(text);
+    }
 
     options.onTranscriptionComplete?.(text);
 
@@ -168,11 +190,17 @@ export async function startVoiceRecording(
 }
 
 /**
- * Stop recording and get transcription
+ * Stop recording and get transcription (with optional post-processing)
  */
-export async function stopAndTranscribe(): Promise<string | null> {
+export async function stopAndTranscribe(
+  enablePostProcessing: boolean = true
+): Promise<string | null> {
   try {
-    return await recordAndTranscribe();
+    let text = await recordAndTranscribe();
+    if (enablePostProcessing && text) {
+      text = await postProcessText(text);
+    }
+    return text;
   } catch (error) {
     console.error("Failed to transcribe:", error);
     return null;
@@ -180,11 +208,16 @@ export async function stopAndTranscribe(): Promise<string | null> {
 }
 
 /**
- * Stop recording, transcribe, and inject text
+ * Stop recording, transcribe, post-process, and inject text
  */
-export async function stopTranscribeAndInject(): Promise<string | null> {
+export async function stopTranscribeAndInject(
+  enablePostProcessing: boolean = true
+): Promise<string | null> {
   try {
-    const text = await recordAndTranscribe();
+    let text = await recordAndTranscribe();
+    if (enablePostProcessing && text) {
+      text = await postProcessText(text);
+    }
     if (text) {
       await injectText(text);
     }
@@ -272,9 +305,9 @@ export async function addTranscription(
 ): Promise<number> {
   return await invoke<number>("add_transcription", {
     text,
-    model_id: modelId,
+    modelId,
     language,
-    duration_ms: durationMs,
+    durationMs,
   });
 }
 

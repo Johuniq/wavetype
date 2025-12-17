@@ -15,6 +15,7 @@ pub struct AppSettings {
     pub play_audio_feedback: bool,
     pub auto_start_on_boot: bool,
     pub minimize_to_tray: bool,
+    pub post_processing_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -29,6 +30,7 @@ impl Default for AppSettings {
             play_audio_feedback: true,
             auto_start_on_boot: false,
             minimize_to_tray: true,
+            post_processing_enabled: true,
         }
     }
 }
@@ -128,10 +130,17 @@ impl Database {
                 play_audio_feedback INTEGER NOT NULL DEFAULT 1,
                 auto_start_on_boot INTEGER NOT NULL DEFAULT 0,
                 minimize_to_tray INTEGER NOT NULL DEFAULT 1,
+                post_processing_enabled INTEGER NOT NULL DEFAULT 1,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
             [],
         )?;
+
+        // Add post_processing_enabled column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN post_processing_enabled INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
 
         // App state table
         conn.execute(
@@ -231,7 +240,18 @@ impl Database {
             ("base", "Base", "142 MB", 142_i64 * 1024 * 1024, "Balanced speed and accuracy. Recommended for most users.", "[\"en\"]"),
             ("small", "Small", "466 MB", 466_i64 * 1024 * 1024, "Higher accuracy, slower than Base. Good for longer dictation.", "[\"en\", \"bn\"]"),
             ("medium", "Medium", "1.5 GB", 1536_i64 * 1024 * 1024, "Best accuracy for most languages. Requires more RAM.", "[\"en\", \"bn\"]"),
-            ("large", "Large", "2.9 GB", 2969_i64 * 1024 * 1024, "Highest accuracy. Best for professional use.", "[\"en\", \"bn\"]"),
+            ("large-v3", "Large v3", "2.9 GB", 2969_i64 * 1024 * 1024, "Highest accuracy multilingual. Best for professional use.", "[\"en\", \"bn\"]"),
+            ("large-v3-turbo", "Large v3 Turbo", "1.6 GB", 1600_i64 * 1024 * 1024, "Fast large model. Great speed/accuracy balance.", "[\"en\", \"bn\"]"),
+            // English-only models (faster)
+            ("tiny.en", "Tiny English", "75 MB", 75_i64 * 1024 * 1024, "Fastest English-only. Great for quick notes.", "[\"en\"]"),
+            ("base.en", "Base English", "142 MB", 142_i64 * 1024 * 1024, "Fast English-only with good accuracy.", "[\"en\"]"),
+            ("small.en", "Small English", "466 MB", 466_i64 * 1024 * 1024, "Accurate English-only model.", "[\"en\"]"),
+            ("medium.en", "Medium English", "1.5 GB", 1536_i64 * 1024 * 1024, "High accuracy English-only.", "[\"en\"]"),
+            // Distil-Whisper models (6x faster)
+            ("distil-small.en", "Distil Small", "166 MB", 166_i64 * 1024 * 1024, "6x faster than Small. Great for real-time.", "[\"en\"]"),
+            ("distil-medium.en", "Distil Medium", "390 MB", 390_i64 * 1024 * 1024, "6x faster than Medium. Best speed/accuracy.", "[\"en\"]"),
+            ("distil-large-v2", "Distil Large v2", "756 MB", 756_i64 * 1024 * 1024, "Fast large model with near-equal accuracy.", "[\"en\"]"),
+            ("distil-large-v3", "Distil Large v3", "756 MB", 756_i64 * 1024 * 1024, "Latest distilled model. Excellent performance.", "[\"en\"]"),
         ];
 
         for (id, name, size, size_bytes, description, languages) in models {
@@ -250,7 +270,8 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
-                    show_recording_indicator, play_audio_feedback, auto_start_on_boot, minimize_to_tray
+                    show_recording_indicator, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
+                    post_processing_enabled
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -264,6 +285,7 @@ impl Database {
                     play_audio_feedback: row.get::<_, i32>(6)? == 1,
                     auto_start_on_boot: row.get::<_, i32>(7)? == 1,
                     minimize_to_tray: row.get::<_, i32>(8)? == 1,
+                    post_processing_enabled: row.get::<_, i32>(9)? == 1,
                 })
             },
         )
@@ -282,6 +304,7 @@ impl Database {
                 play_audio_feedback = ?7,
                 auto_start_on_boot = ?8,
                 minimize_to_tray = ?9,
+                post_processing_enabled = ?10,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -294,6 +317,7 @@ impl Database {
                 settings.play_audio_feedback as i32,
                 settings.auto_start_on_boot as i32,
                 settings.minimize_to_tray as i32,
+                settings.post_processing_enabled as i32,
             ],
         )?;
         Ok(())

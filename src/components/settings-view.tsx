@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { UpdaterView } from "@/components/updater-view";
 import {
   downloadFile,
   exportAppData,
@@ -475,6 +476,24 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 }
               />
             </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Smart Text Processing</Label>
+                <p className="text-xs text-muted-foreground">
+                  Auto-format code: "camel case" → camelCase, "index dot ts" →
+                  index.ts
+                </p>
+              </div>
+              <Switch
+                checked={settings.postProcessingEnabled}
+                onCheckedChange={(checked) =>
+                  updateSettings({ postProcessingEnabled: checked })
+                }
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -539,6 +558,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </CardContent>
         </Card>
 
+        {/* Software Updates */}
+        <UpdaterView />
+
         {/* Reset Settings */}
         <Button
           variant="outline"
@@ -556,7 +578,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         {/* App Info */}
         <div className="flex flex-col items-center py-4 text-center">
           <Logo size="sm" />
-          <p className="text-xs text-muted-foreground mt-2">v1.0.0</p>
           <p className="text-xs text-muted-foreground">
             Voice typing fast and privately with AI
           </p>

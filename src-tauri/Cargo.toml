@@ -34,6 +34,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 tauri-plugin-os = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -64,6 +65,10 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Hostname for device identification
 hostname = "0.4"
+
+# Regex for text post-processing
+regex = "1"
+lazy_static = "1.4"
 
 # Whisper speech-to-text
 whisper-rs = "0.12"

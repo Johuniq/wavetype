@@ -33,7 +33,7 @@
       "menuOnLeftClick": false
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://huggingface.co https://*.huggingface.co",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://github.com https://*.github.com https://api.github.com",
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": true
     }
@@ -116,6 +116,15 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU3NTY4QzA5QUIwNkMxM0EKUldRNndRYXJDWXhXVjZlUHpKUXZ0L3hZVXNsb0lYdUYySFMrdzdDczVPanVmbE9TdlVsbFNWQVgK",
+      "endpoints": [
+        "https://github.com/Johuniq/wavetype/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

@@ -151,7 +151,9 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
 
     try {
       const startTime = Date.now();
-      const text = await stopTranscribeAndInject();
+      const text = await stopTranscribeAndInject(
+        settings.postProcessingEnabled
+      );
       const durationMs = Date.now() - startTime;
       if (text) {
         setLastTranscription(text);

@@ -41,7 +41,9 @@ export function HistoryView({ onClose }: HistoryViewProps) {
   const loadHistory = async () => {
     setIsLoading(true);
     try {
+      console.log("Loading transcription history...");
       const items = await getTranscriptionHistory(100);
+      console.log("Loaded history items:", items);
       setHistory(items);
     } catch (error) {
       console.error("Failed to load history:", error);

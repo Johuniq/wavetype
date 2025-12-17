@@ -2,6 +2,7 @@ mod audio;
 mod database;
 mod downloader;
 mod license;
+mod post_process;
 mod text_inject;
 mod transcription;
 
@@ -9,6 +10,7 @@ use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
 use license::{LicenseClient, LicenseStatus, get_device_label, get_device_meta};
+use post_process::PostProcessor;
 use log::{info, warn, debug};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -26,7 +28,7 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 
 // Polar Organization ID - REPLACE WITH YOUR ACTUAL ORG ID
-const POLAR_ORG_ID: &str = "YOUR_POLAR_ORGANIZATION_ID";
+const POLAR_ORG_ID: &str = "polar_oat_2wTM6MLdEFsJd8UWaSROeNGBT8tJ8UCmfVQXk4f2UXc";
 
 // Rate limiter for preventing abuse
 pub struct RateLimiter {
@@ -129,6 +131,8 @@ pub enum CommandError {
     TextInjection(String),
     #[error("License error: {0}")]
     License(String),
+    #[error("Post-processing error: {0}")]
+    PostProcessing(String),
 }
 
 impl serde::Serialize for CommandError {
@@ -530,6 +534,23 @@ fn get_downloaded_models(downloader: State<DownloaderState>) -> Vec<String> {
 #[tauri::command]
 fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> String {
     downloader.0.get_model_path(&model_id).to_string_lossy().to_string()
+}
+
+// ==================== Post-Processing Commands ====================
+
+#[tauri::command]
+fn post_process_text(text: String) -> CommandResult<String> {
+    let sanitized = sanitize_text(&text, 100_000)
+        .map_err(|e| CommandError::PostProcessing(e))?;
+    
+    if sanitized.is_empty() {
+        return Ok(String::new());
+    }
+    
+    let processor = PostProcessor::new();
+    let processed = processor.process(&sanitized);
+    
+    Ok(processed)
 }
 
 // ==================== Text Injection Commands ====================
@@ -1114,6 +1135,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             info!("Initializing application...");
             
@@ -1197,6 +1219,8 @@ pub fn run() {
             get_model_path,
             // Text injection
             inject_text,
+            // Post-processing
+            post_process_text,
             // Transcription history
             add_transcription,
             get_transcription_history,

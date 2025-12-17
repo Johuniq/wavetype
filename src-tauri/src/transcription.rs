@@ -63,9 +63,19 @@ impl Transcriber {
         // (uses default context from model)
         params.set_audio_ctx(0);
         
-        // Use 1 thread for CPU (can adjust based on system)
-        // Using fewer threads can sometimes be faster for short audio
-        params.set_n_threads(4);
+        // Use more threads for faster CPU processing
+        // Match available CPU cores for optimal performance
+        let num_threads = std::thread::available_parallelism()
+            .map(|p| p.get() as i32)
+            .unwrap_or(4)
+            .min(8); // Cap at 8 threads
+        params.set_n_threads(num_threads);
+        
+        // Disable entropy threshold to speed up processing
+        params.set_entropy_thold(2.8);
+        
+        // Set temperature to 0 for deterministic, faster decoding
+        params.set_temperature(0.0);
 
         // Create state for this transcription
         let mut state = self.ctx.create_state()
@@ -98,17 +108,50 @@ impl Transcriber {
 // Model download URLs (Hugging Face)
 pub fn get_model_url(model_id: &str) -> Option<String> {
     let base = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+    let distil_base = "https://huggingface.co/distil-whisper";
     
     match model_id {
+        // Standard Whisper models (multilingual)
         "tiny" => Some(format!("{}/ggml-tiny.bin", base)),
         "base" => Some(format!("{}/ggml-base.bin", base)),
         "small" => Some(format!("{}/ggml-small.bin", base)),
         "medium" => Some(format!("{}/ggml-medium.bin", base)),
+        "large-v2" => Some(format!("{}/ggml-large-v2.bin", base)),
+        "large-v3" => Some(format!("{}/ggml-large-v3.bin", base)),
+        "large-v3-turbo" => Some(format!("{}/ggml-large-v3-turbo.bin", base)),
+        
+        // English-only Whisper models (faster, optimized for English)
+        "tiny.en" => Some(format!("{}/ggml-tiny.en.bin", base)),
+        "base.en" => Some(format!("{}/ggml-base.en.bin", base)),
+        "small.en" => Some(format!("{}/ggml-small.en.bin", base)),
+        "medium.en" => Some(format!("{}/ggml-medium.en.bin", base)),
+        
+        // Distil-Whisper models (6x faster, similar accuracy)
+        "distil-small.en" => Some(format!("{}/distil-small.en/resolve/main/ggml-distil-small.en.bin", distil_base)),
+        "distil-medium.en" => Some(format!("{}/distil-medium.en/resolve/main/ggml-distil-medium.en.bin", distil_base)),
+        "distil-large-v2" => Some(format!("{}/distil-large-v2/resolve/main/ggml-distil-large-v2.bin", distil_base)),
+        "distil-large-v3" => Some(format!("{}/distil-large-v3/resolve/main/ggml-distil-large-v3.bin", distil_base)),
+        
+        // Legacy (for backwards compatibility)
         "large" => Some(format!("{}/ggml-large-v3.bin", base)),
+        
         _ => None,
     }
 }
 
 pub fn get_model_filename(model_id: &str) -> String {
-    format!("ggml-{}.bin", model_id)
+    match model_id {
+        // Distil models have different naming
+        "distil-small.en" => "ggml-distil-small.en.bin".to_string(),
+        "distil-medium.en" => "ggml-distil-medium.en.bin".to_string(),
+        "distil-large-v2" => "ggml-distil-large-v2.bin".to_string(),
+        "distil-large-v3" => "ggml-distil-large-v3.bin".to_string(),
+        // English-only models
+        "tiny.en" => "ggml-tiny.en.bin".to_string(),
+        "base.en" => "ggml-base.en.bin".to_string(),
+        "small.en" => "ggml-small.en.bin".to_string(),
+        "medium.en" => "ggml-medium.en.bin".to_string(),
+        // Standard models
+        _ => format!("ggml-{}.bin", model_id),
+    }
 }
