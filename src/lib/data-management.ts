@@ -5,11 +5,6 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import {
-  dbGetSettings,
-  dbUpdateSettings,
-  type DbAppSettings,
-} from "./database-api";
-import {
   clearTranscriptionHistory,
   getTranscriptionHistory,
   type TranscriptionHistoryItem,
@@ -18,21 +13,18 @@ import {
 export interface ExportData {
   version: string;
   exportedAt: string;
-  settings: DbAppSettings;
   history: TranscriptionHistoryItem[];
 }
 
 /**
- * Export all app data as JSON
+ * Export history data as JSON
  */
 export async function exportAppData(): Promise<string> {
-  const settings = await dbGetSettings();
   const history = await getTranscriptionHistory(10000); // Get all history
 
   const exportData: ExportData = {
     version: "1.0.0",
     exportedAt: new Date().toISOString(),
-    settings,
     history,
   };
 
@@ -44,7 +36,6 @@ export async function exportAppData(): Promise<string> {
  */
 export async function importAppData(jsonData: string): Promise<{
   success: boolean;
-  settingsImported: boolean;
   historyCount: number;
   error?: string;
 }> {
@@ -55,20 +46,12 @@ export async function importAppData(jsonData: string): Promise<{
     if (!data.version) {
       return {
         success: false,
-        settingsImported: false,
         historyCount: 0,
         error: "Invalid export file format",
       };
     }
 
-    let settingsImported = false;
     let historyCount = 0;
-
-    // Import settings
-    if (data.settings) {
-      await dbUpdateSettings(data.settings);
-      settingsImported = true;
-    }
 
     // Import history
     if (data.history && Array.isArray(data.history)) {
@@ -87,11 +70,10 @@ export async function importAppData(jsonData: string): Promise<{
       }
     }
 
-    return { success: true, settingsImported, historyCount };
+    return { success: true, historyCount };
   } catch (error) {
     return {
       success: false,
-      settingsImported: false,
       historyCount: 0,
       error:
         error instanceof Error ? error.message : "Failed to parse import file",
@@ -161,20 +143,47 @@ export async function factoryReset(): Promise<void> {
 }
 
 /**
- * Download data as file
+ * Download data as file using Tauri's dialog for save location
  */
-export function downloadFile(
+export async function downloadFile(
   content: string,
   filename: string,
-  mimeType: string = "application/json"
-) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  _mimeType: string = "application/json"
+): Promise<boolean> {
+  try {
+    // Use dynamic import to avoid issues
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+
+    // Open save dialog
+    const filePath = await save({
+      defaultPath: filename,
+      filters: [
+        {
+          name: "JSON",
+          extensions: ["json"],
+        },
+      ],
+    });
+
+    if (filePath) {
+      // Write file to selected location
+      await writeTextFile(filePath, content);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Failed to save file:", error);
+    // Fallback to browser download
+    const blob = new Blob([content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return true;
+  }
 }

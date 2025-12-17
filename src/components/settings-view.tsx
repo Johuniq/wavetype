@@ -17,6 +17,7 @@ import {
   exportAppData,
   getStorageStats,
 } from "@/lib/data-management";
+import { setAutoStart } from "@/lib/preferences-api";
 import {
   deleteModel,
   downloadModel,
@@ -137,9 +138,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       const filename = `WaveType-backup-${new Date()
         .toISOString()
         .slice(0, 10)}.json`;
-      downloadFile(data, filename);
-      setSuccessMessage("Data exported successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      const saved = await downloadFile(data, filename);
+      if (saved) {
+        setSuccessMessage("Data exported successfully");
+        setTimeout(() => setSuccessMessage(null), 3000);
+      }
     } catch (err) {
       console.error("Export failed:", err);
       setError("Failed to export data");
@@ -309,32 +312,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </CardContent>
         </Card>
 
-        {/* Language Settings */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Language</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label>Transcription Language</Label>
-              <Select
-                value={settings.language}
-                onValueChange={(value: "en" | "bn") =>
-                  updateSettings({ language: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="bn">বাংলা (Bangla)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Model Management */}
         <Card>
           <CardHeader className="pb-3">
@@ -416,7 +393,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                         {downloadingModelId === model.id ? (
                           <>
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            {downloadProgress}%
+                            {Math.floor(downloadProgress)}%
                           </>
                         ) : (
                           <>
@@ -494,9 +471,15 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               </div>
               <Switch
                 checked={settings.autoStartOnBoot}
-                onCheckedChange={(checked) =>
-                  updateSettings({ autoStartOnBoot: checked })
-                }
+                onCheckedChange={async (checked) => {
+                  try {
+                    await setAutoStart(checked);
+                    updateSettings({ autoStartOnBoot: checked });
+                  } catch (err) {
+                    console.error("Failed to set autostart:", err);
+                    setError("Failed to change autostart setting");
+                  }
+                }}
               />
             </div>
 

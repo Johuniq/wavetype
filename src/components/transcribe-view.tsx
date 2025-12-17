@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { transcribeFile } from "@/lib/voice-api";
+import { addTranscription, transcribeFile } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -35,7 +35,16 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
         filters: [
           {
             name: "Audio",
-            extensions: ["wav", "mp3", "m4a", "flac", "ogg", "webm"],
+            extensions: [
+              "wav",
+              "mp3",
+              "m4a",
+              "flac",
+              "ogg",
+              "webm",
+              "aac",
+              "mkv",
+            ],
           },
         ],
       });
@@ -64,12 +73,28 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
     setError(null);
     setTranscription("");
 
+    const startTime = Date.now();
     try {
       const text = await transcribeFile(
         selectedFile,
         settings.postProcessingEnabled
       );
       setTranscription(text);
+
+      // Save to history
+      if (text) {
+        const durationMs = Date.now() - startTime;
+        try {
+          await addTranscription(
+            text,
+            settings.selectedModelId || "base",
+            settings.language,
+            durationMs
+          );
+        } catch (historyErr) {
+          console.error("Failed to save to history:", historyErr);
+        }
+      }
     } catch (err) {
       console.error("Transcription failed:", err);
       setError(err instanceof Error ? err.message : "Transcription failed");

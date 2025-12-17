@@ -375,10 +375,10 @@ async fn transcribe_file(
         .map(|e| e.to_lowercase());
     
     match extension.as_deref() {
-        Some("wav") | Some("mp3") | Some("m4a") | Some("ogg") | Some("flac") => {}
+        Some("wav") | Some("mp3") | Some("m4a") | Some("ogg") | Some("flac") | Some("aac") | Some("webm") | Some("mkv") => {}
         _ => {
             return Err(CommandError::Transcription(
-                "Unsupported audio format. Please use WAV, MP3, M4A, OGG, or FLAC.".to_string()
+                "Unsupported audio format. Please use WAV, MP3, M4A, OGG, FLAC, AAC, or WebM.".to_string()
             ));
         }
     }
@@ -405,46 +405,91 @@ async fn transcribe_file(
 }
 
 fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::DecoderOptions;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
     use std::fs::File;
-    use std::io::BufReader;
     
-    let file = File::open(file_path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
+    let file = File::open(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
     
-    // Try to read as WAV file
-    let reader = hound::WavReader::new(reader).map_err(|e| format!("Invalid WAV file: {}", e))?;
+    // Create a media source stream
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
     
-    let spec = reader.spec();
-    let sample_rate = spec.sample_rate;
-    let channels = spec.channels as usize;
+    // Create a hint to help the format registry guess what format reader is appropriate
+    let mut hint = Hint::new();
+    if let Some(ext) = std::path::Path::new(file_path).extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
     
-    // Read all samples
-    let samples: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Int => {
-            let bits = spec.bits_per_sample;
-            let max_val = (1i32 << (bits - 1)) as f32;
-            reader
-                .into_samples::<i32>()
-                .filter_map(|s| s.ok())
-                .map(|s| s as f32 / max_val)
-                .collect()
+    // Probe the media source
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .map_err(|e| format!("Failed to probe audio format: {}", e))?;
+    
+    let mut format = probed.format;
+    
+    // Find the first audio track
+    let track = format.tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or_else(|| "No audio track found".to_string())?;
+    
+    let track_id = track.id;
+    let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+    let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2);
+    
+    // Create a decoder
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .map_err(|e| format!("Failed to create decoder: {}", e))?;
+    
+    let mut all_samples: Vec<f32> = Vec::new();
+    
+    // Decode all packets
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(symphonia::core::errors::Error::IoError(ref e)) 
+                if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(symphonia::core::errors::Error::ResetRequired) => {
+                decoder.reset();
+                continue;
+            }
+            Err(e) => return Err(format!("Failed to read packet: {}", e)),
+        };
+        
+        // Skip packets from other tracks
+        if packet.track_id() != track_id {
+            continue;
         }
-        hound::SampleFormat::Float => {
-            reader
-                .into_samples::<f32>()
-                .filter_map(|s| s.ok())
-                .collect()
-        }
-    };
+        
+        // Decode the packet
+        let decoded = match decoder.decode(&packet) {
+            Ok(decoded) => decoded,
+            Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
+            Err(e) => return Err(format!("Failed to decode: {}", e)),
+        };
+        
+        // Convert to f32 samples
+        let spec = *decoded.spec();
+        let duration = decoded.capacity() as u64;
+        let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
+        sample_buf.copy_interleaved_ref(decoded);
+        
+        all_samples.extend_from_slice(sample_buf.samples());
+    }
     
-    // Convert to mono if stereo
+    // Convert to mono if needed
     let mono: Vec<f32> = if channels > 1 {
-        samples
+        all_samples
             .chunks(channels)
             .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
             .collect()
     } else {
-        samples
+        all_samples
     };
     
     // Resample to 16kHz if needed
@@ -1132,10 +1177,15 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .setup(|app| {
             info!("Initializing application...");
             

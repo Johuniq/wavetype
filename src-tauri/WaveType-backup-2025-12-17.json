@@ -1,0 +1,150 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-12-17T17:18:18.754Z",
+  "history": [
+    {
+      "id": 18,
+      "text": "Fix the issue in @build.rs and @index.html",
+      "model_id": "base",
+      "language": "en",
+      "duration_ms": 2072,
+      "created_at": "2025-12-17 16:31:11"
+    },
+    {
+      "id": 17,
+      "text": "Fix the issue in @build.rs",
+      "model_id": "base",
+      "language": "en",
+      "duration_ms": 2017,
+      "created_at": "2025-12-17 16:30:42"
+    },
+    {
+      "id": 16,
+      "text": "Fix the issue in build.rs",
+      "model_id": "base",
+      "language": "en",
+      "duration_ms": 2812,
+      "created_at": "2025-12-17 16:26:59"
+    },
+    {
+      "id": 15,
+      "text": "R.tsl",
+      "model_id": "base",
+      "language": "en",
+      "duration_ms": 2690,
+      "created_at": "2025-12-17 16:26:46"
+    },
+    {
+      "id": 14,
+      "text": ".Tsx.",
+      "model_id": "base",
+      "language": "en",
+      "duration_ms": 2916,
+      "created_at": "2025-12-17 16:26:36"
+    },
+    {
+      "id": 13,
+      "text": "Next I'll show you in build.rs.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1506,
+      "created_at": "2025-12-17 16:24:16"
+    },
+    {
+      "id": 12,
+      "text": "Hello, how are you?",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1339,
+      "created_at": "2025-12-17 16:24:02"
+    },
+    {
+      "id": 11,
+      "text": "Oh, Ari.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1293,
+      "created_at": "2025-12-17 16:23:55"
+    },
+    {
+      "id": 10,
+      "text": "You will like this headliner design",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1503,
+      "created_at": "2025-12-17 16:23:36"
+    },
+    {
+      "id": 9,
+      "text": ". RS.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1257,
+      "created_at": "2025-12-17 16:23:07"
+    },
+    {
+      "id": 8,
+      "text": "We will dot R s.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1385,
+      "created_at": "2025-12-17 16:22:58"
+    },
+    {
+      "id": 7,
+      "text": "Next up are in build.rs.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1439,
+      "created_at": "2025-12-17 16:22:32"
+    },
+    {
+      "id": 6,
+      "text": "The bug in build.rs",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1329,
+      "created_at": "2025-12-17 16:22:15"
+    },
+    {
+      "id": 5,
+      "text": "Next the bug in build.rs",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1451,
+      "created_at": "2025-12-17 16:22:02"
+    },
+    {
+      "id": 4,
+      "text": "Next up are in build.rs.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1778,
+      "created_at": "2025-12-17 16:16:48"
+    },
+    {
+      "id": 3,
+      "text": "Fix the bug in field.Rs.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1472,
+      "created_at": "2025-12-17 12:09:13"
+    },
+    {
+      "id": 2,
+      "text": "Fix the bagin, wheel.Rf.",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1621,
+      "created_at": "2025-12-17 12:08:56"
+    },
+    {
+      "id": 1,
+      "text": "Hello, what's your name?",
+      "model_id": "tiny",
+      "language": "en",
+      "duration_ms": 1955,
+      "created_at": "2025-12-17 11:25:15"
+    }
+  ]
+}

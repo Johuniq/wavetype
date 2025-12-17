@@ -81,6 +81,9 @@ byteorder = "1.5"
 
 # UUID for unique identifiers
 uuid = { version = "1", features = ["v4"] }
+tauri-plugin-fs = "2.0.0-beta.0"
+symphonia = { version = "0.5.5", features = ["mp3", "ogg", "flac", "aac", "isomp4"] }
+tauri-plugin-autostart = "2.0.0-beta.0"
 
 # Production profile optimizations
 [profile.release]

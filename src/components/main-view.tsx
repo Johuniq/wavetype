@@ -6,6 +6,7 @@ import { TranscribeView } from "@/components/transcribe-view";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
   addTranscription,
@@ -129,6 +130,12 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
 
     try {
       setErrorMessage(null);
+
+      // Play audio feedback if enabled
+      if (settings.playAudioFeedback) {
+        playFeedbackSound("start");
+      }
+
       await startRecording();
     } catch (error) {
       console.error("Failed to start recording:", error);
@@ -136,7 +143,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       recordingStatusRef.current = "error";
       setRecordingStatus("error");
     }
-  }, [setErrorMessage, setRecordingStatus]);
+  }, [setErrorMessage, setRecordingStatus, settings.playAudioFeedback]);
 
   // Handle stopping recording
   const handleStopRecording = useCallback(async () => {
@@ -148,6 +155,11 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     // Set status IMMEDIATELY to prevent duplicate calls
     recordingStatusRef.current = "processing";
     setRecordingStatus("processing");
+
+    // Play audio feedback if enabled
+    if (settings.playAudioFeedback) {
+      playFeedbackSound("stop");
+    }
 
     try {
       const startTime = Date.now();
@@ -186,7 +198,17 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         setRecordingStatus("idle");
       }, 2000);
     }
-  }, [setRecordingStatus, setLastTranscription, setErrorMessage]);
+  }, [
+    setRecordingStatus,
+    setLastTranscription,
+    setErrorMessage,
+    settings.playAudioFeedback,
+    settings.postProcessingEnabled,
+    selectedModel?.id,
+    settings.language,
+    toastSuccess,
+    toastError,
+  ]);
 
   // Register hotkey on mount and when hotkey settings change
   useEffect(() => {

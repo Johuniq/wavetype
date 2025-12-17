@@ -17,10 +17,24 @@ lazy_static! {
         r"(?i)\b(function|func|method|def)\s+([a-z]+(?:\s+[a-z]+)*)\b"
     ).unwrap();
     
-    // Pattern: "file name dot extension" -> filename.extension
+    // Pattern: "file name dot extension" -> @filename.extension
+    // Matches: "build dot rs", "index dot ts", etc.
     static ref FILE_PATH_PATTERN: Regex = Regex::new(
         r"(?i)\b([a-z][a-z0-9_-]*)\s+dot\s+(js|ts|tsx|jsx|rs|py|go|rb|java|cpp|c|h|hpp|css|scss|html|json|yaml|yml|toml|md|txt|sh|bash|sql|vue|svelte|astro)\b"
     ).unwrap();
+    
+    // Pattern: "file name.extension" -> @filename.extension (when Whisper outputs actual period)
+    // Matches: "build.rs", "index.ts", etc. (adds @ prefix)
+    static ref FILE_WITH_PERIOD_PATTERN: Regex = Regex::new(
+        r"(?i)\b([a-z][a-z0-9_-]*)\.([a-z]{1,5})\b"
+    ).unwrap();
+    
+    // Known file extensions for the period pattern
+    static ref FILE_EXTENSIONS: Vec<&'static str> = vec![
+        "js", "ts", "tsx", "jsx", "rs", "py", "go", "rb", "java", "cpp", "c",
+        "h", "hpp", "css", "scss", "html", "json", "yaml", "yml", "toml", "md",
+        "txt", "sh", "bash", "sql", "vue", "svelte", "astro", "env", "lock"
+    ];
     
     // Pattern: "slash" -> /
     static ref SLASH_PATTERN: Regex = Regex::new(r"(?i)\b(forward\s+)?slash\b").unwrap();
@@ -121,7 +135,13 @@ lazy_static! {
     // Pattern: "in file X dot ext" or "file X dot ext" -> @X.ext (IDE file mention)
     // Matches patterns like: "in index dot ts", "file main dot rs", "the app dot tsx"
     static ref FILE_MENTION_PATTERN: Regex = Regex::new(
-        r"(?i)\b(in|the|file|from|to|open|edit|fix|update|check|see|look at|modify|change|review|refactor)\s+([a-z][a-z0-9_-]*)\s+dot\s+(js|ts|tsx|jsx|rs|py|go|rb|java|cpp|c|h|hpp|css|scss|html|json|yaml|yml|toml|md|txt|sh|sql|vue|svelte|astro|env|config|lock|gitignore|dockerignore|makefile)\b"
+        r"(?i)\b(in|the|file|from|to|open|edit|fix|update|check|see|look at|modify|change|review|refactor|at|mention)\s+([a-z][a-z0-9_-]*)\s+dot\s+(js|ts|tsx|jsx|rs|py|go|rb|java|cpp|c|h|hpp|css|scss|html|json|yaml|yml|toml|md|txt|sh|sql|vue|svelte|astro|env|config|lock|gitignore|dockerignore|makefile)\b"
+    ).unwrap();
+    
+    // Pattern: standalone file mention "X dot ext" -> @X.ext (for AI IDE context)
+    // This is more aggressive - any "word dot extension" pattern
+    static ref STANDALONE_FILE_MENTION_PATTERN: Regex = Regex::new(
+        r"(?i)\b([a-z][a-z0-9_-]*)\s+dot\s+(js|ts|tsx|jsx|rs|py|go|rb|java|cpp|c|h|hpp|css|scss|html|json|yaml|yml|toml|md|txt|sh|sql|vue|svelte|astro|env|config|lock|gitignore|makefile)\b"
     ).unwrap();
     
     // Pattern for path with file mention: "src slash components slash button dot tsx" -> src/components/@button.tsx
@@ -168,21 +188,36 @@ impl PostProcessor {
     pub fn process(&self, text: &str) -> String {
         let mut result = text.to_string();
         
-        // Apply transformations in order
-        // First, fix sentence casing on raw text
-        result = self.fix_sentence_casing(&result);
+        // Debug: log input
+        println!("[PostProcess] Input: {:?}", text);
         
-        // Then apply code-specific transformations
+        // Apply transformations in order
+        // IMPORTANT: Process file paths and mentions BEFORE sentence casing
+        // to avoid capitalizing letters after dots in filenames
+        
+        // First, apply code-specific transformations that involve "dot"
         result = self.process_explicit_casing(&result);
         result = self.process_functions(&result);
         result = self.process_file_mentions(&result);  // Process @file mentions first
-        result = self.process_file_paths(&result);
+        result = self.process_file_paths(&result);     // Then regular file paths
+        
+        // Debug: log after file processing
+        println!("[PostProcess] After file processing: {:?}", result);
+        
         result = self.process_variables(&result);
         result = self.process_classes(&result);
-        result = self.process_symbols(&result);
+        result = self.process_symbols(&result);        // Convert remaining "dot" to "."
+        
+        // NOW apply sentence casing after file paths are processed
+        // This prevents capitalizing after dots in filenames like "build.rs"
+        result = self.fix_sentence_casing(&result);
+        
         result = self.process_abbreviations(&result);
         result = self.process_keywords(&result);  // Apply keyword casing
         result = self.cleanup_whitespace(&result);
+        
+        // Debug: log output
+        println!("[PostProcess] Output: {:?}", result);
         
         result
     }
@@ -239,14 +274,45 @@ impl PostProcessor {
             format!("{} @{}.{}", preposition, filename, ext)
         }).to_string();
         
+        // Also process standalone file mentions (without preposition)
+        // This converts "build dot rs" -> "@build.rs" when no preposition is present
+        // Only do this if the pattern wasn't already matched above (check for @)
+        result = STANDALONE_FILE_MENTION_PATTERN.replace_all(&result, |caps: &regex::Captures| {
+            let filename = caps[1].to_lowercase();
+            let ext = caps[2].to_lowercase();
+            // Check if this was already processed (would have @ before it)
+            format!("@{}.{}", filename, ext)
+        }).to_string();
+        
         result
     }
     
-    /// Process file paths (e.g., "index dot ts" -> "index.ts")
+    /// Process file paths (e.g., "index dot ts" -> "@index.ts")
+    /// Always adds @ prefix for IDE file mentions
     fn process_file_paths(&self, text: &str) -> String {
-        FILE_PATH_PATTERN.replace_all(text, |caps: &regex::Captures| {
-            format!("{}.{}", caps[1].to_lowercase(), caps[2].to_lowercase())
-        }).to_string()
+        let mut result = FILE_PATH_PATTERN.replace_all(text, |caps: &regex::Captures| {
+            format!("@{}.{}", caps[1].to_lowercase(), caps[2].to_lowercase())
+        }).to_string();
+        
+        // Also handle files that already have a period (Whisper sometimes outputs "build.rs" directly)
+        // Add @ prefix if not already present
+        result = FILE_WITH_PERIOD_PATTERN.replace_all(&result, |caps: &regex::Captures| {
+            let filename = &caps[1];
+            let ext = caps[2].to_lowercase();
+            
+            // Only add @ if it's a known file extension
+            if FILE_EXTENSIONS.contains(&ext.as_str()) {
+                format!("@{}.{}", filename.to_lowercase(), ext)
+            } else {
+                // Not a known extension, keep as-is
+                format!("{}.{}", filename, &caps[2])
+            }
+        }).to_string();
+        
+        // Remove duplicate @@ if any
+        result = result.replace("@@", "@");
+        
+        result
     }
     
     /// Process variable declarations
@@ -405,18 +471,31 @@ impl PostProcessor {
     }
     
     /// Fix sentence casing (capitalize first letter after periods)
+    /// But NOT after dots in file paths/extensions
     fn fix_sentence_casing(&self, text: &str) -> String {
         let mut result = String::new();
         let mut capitalize_next = true;
+        let chars: Vec<char> = text.chars().collect();
         
-        for c in text.chars() {
+        for (i, &c) in chars.iter().enumerate() {
             if capitalize_next && c.is_alphabetic() {
                 result.push(c.to_uppercase().next().unwrap_or(c));
                 capitalize_next = false;
             } else {
                 result.push(c);
                 if c == '.' || c == '!' || c == '?' {
-                    capitalize_next = true;
+                    // Check if this looks like a file extension (alphanumeric before and after the dot)
+                    let before_is_alnum = i > 0 && chars.get(i - 1).map(|ch| ch.is_alphanumeric()).unwrap_or(false);
+                    let after_is_alnum = chars.get(i + 1).map(|ch| ch.is_alphanumeric()).unwrap_or(false);
+                    
+                    // Only capitalize if it's a sentence ending (not a file extension)
+                    // File extensions have alphanumeric chars both before and after the dot
+                    if c == '.' && before_is_alnum && after_is_alnum {
+                        // This looks like a file extension, don't capitalize
+                        capitalize_next = false;
+                    } else {
+                        capitalize_next = true;
+                    }
                 }
             }
         }

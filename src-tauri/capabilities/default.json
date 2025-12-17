@@ -31,6 +31,13 @@
     "dialog:allow-message",
     "dialog:allow-ask",
     "dialog:allow-confirm",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$DOWNLOAD/**", "$DOCUMENT/**", "$HOME/**"]
+    },
     "process:allow-exit",
     "process:allow-restart",
     "os:allow-arch",
@@ -49,7 +56,10 @@
     "updater:allow-check",
     "updater:allow-download",
     "updater:allow-download-and-install",
-    "updater:allow-install"
+    "updater:allow-install",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ],
   "remote": {
     "urls": []

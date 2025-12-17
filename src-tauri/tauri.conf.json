@@ -33,7 +33,7 @@
       "menuOnLeftClick": false
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://github.com https://*.github.com https://api.github.com",
+      "csp": "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://github.com https://*.github.com https://api.github.com",
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": true
     }
