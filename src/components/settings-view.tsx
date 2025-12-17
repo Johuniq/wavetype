@@ -16,7 +16,6 @@ import {
   downloadFile,
   exportAppData,
   getStorageStats,
-  importAppData,
 } from "@/lib/data-management";
 import {
   deleteModel,
@@ -31,12 +30,11 @@ import {
   Check,
   Download,
   FileDown,
-  FileUp,
   Loader2,
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -61,11 +59,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const [storageStats, setStorageStats] = useState<{
     historyCount: number;
   } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
+  const [recordingToggle, setRecordingToggle] = useState(false);
 
   // Load storage stats
   useEffect(() => {
@@ -150,39 +148,58 @@ export function SettingsView({ onClose }: SettingsViewProps) {
     }
   };
 
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsImporting(true);
-      setError(null);
-      const content = await file.text();
-      const result = await importAppData(content);
-
-      if (result.success) {
-        setSuccessMessage(
-          `Imported ${result.settingsImported ? "settings" : ""} ${
-            result.historyCount > 0
-              ? `and ${result.historyCount} history items`
-              : ""
-          }`
-        );
-        setTimeout(() => setSuccessMessage(null), 3000);
-        // Refresh to load imported data
-        setTimeout(() => window.location.reload(), 1000);
-      } else {
-        setError(result.error || "Failed to import data");
-      }
-    } catch (err) {
-      console.error("Import failed:", err);
-      setError("Failed to import data");
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+  // Hotkey recording handlers
+  const handleRecordHotkey = (type: "pushToTalk" | "toggle") => {
+    if (type === "pushToTalk") {
+      setRecordingPushToTalk(true);
+      setRecordingToggle(false);
+    } else {
+      setRecordingToggle(true);
+      setRecordingPushToTalk(false);
     }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push("Ctrl");
+      if (e.shiftKey) parts.push("Shift");
+      if (e.altKey) parts.push("Alt");
+      if (e.metaKey) parts.push("Meta");
+
+      // Get the key name
+      let key = e.key;
+      if (key === " ") key = "Space";
+      else if (key.length === 1) key = key.toUpperCase();
+      else if (key.startsWith("Arrow")) key = key;
+      else if (key === "Control" || key === "Shift" || key === "Alt" || key === "Meta") {
+        // Don't record modifier-only keys
+        return;
+      }
+
+      parts.push(key);
+      const hotkey = parts.join("+");
+
+      if (type === "pushToTalk") {
+        updateSettings({ pushToTalkKey: hotkey });
+        setRecordingPushToTalk(false);
+      } else {
+        updateSettings({ toggleKey: hotkey });
+        setRecordingToggle(false);
+      }
+
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    // Cancel after 5 seconds
+    setTimeout(() => {
+      setRecordingPushToTalk(false);
+      setRecordingToggle(false);
+      document.removeEventListener("keydown", handleKeyDown);
+    }, 5000);
   };
 
   return (
@@ -253,8 +270,16 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               <Label>Push to Talk Key</Label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                  {settings.pushToTalkKey}
+                  {recordingPushToTalk ? "Press any key..." : settings.pushToTalkKey}
                 </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRecordHotkey("pushToTalk")}
+                  disabled={recordingPushToTalk}
+                >
+                  {recordingPushToTalk ? "Recording..." : "Change"}
+                </Button>
               </div>
             </div>
 
@@ -262,8 +287,16 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               <Label>Toggle Key</Label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                  {settings.toggleKey}
+                  {recordingToggle ? "Press any key..." : settings.toggleKey}
                 </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRecordHotkey("toggle")}
+                  disabled={recordingToggle}
+                >
+                  {recordingToggle ? "Recording..." : "Change"}
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -517,7 +550,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="w-full"
                 onClick={handleExport}
                 disabled={isExporting}
               >
@@ -528,32 +561,10 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 )}
                 Export Data
               </Button>
-
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-              >
-                {isImporting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileUp className="h-4 w-4 mr-2" />
-                )}
-                Import Data
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={handleImport}
-              />
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Export your settings and history to a file, or import from a
-              previous backup.
+              Export your settings and history to a JSON file for backup.
             </p>
           </CardContent>
         </Card>

@@ -49,7 +49,9 @@
     "updater:allow-check",
     "updater:allow-download",
     "updater:allow-download-and-install",
-    "updater:allow-install"
+    "updater:allow-install",
+    "fs:default",
+    "fs:allow-write-text-file"
   ],
   "remote": {
     "urls": []
