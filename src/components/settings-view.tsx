@@ -1,6 +1,4 @@
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -9,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { UpdaterView } from "@/components/updater-view";
 import {
@@ -18,6 +15,7 @@ import {
   getStorageStats,
 } from "@/lib/data-management";
 import { setAutoStart } from "@/lib/preferences-api";
+import { cn } from "@/lib/utils";
 import {
   deleteModel,
   downloadModel,
@@ -29,11 +27,17 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
+  ChevronRight,
+  Cpu,
+  Database,
   Download,
   FileDown,
+  Keyboard,
   Loader2,
   RotateCcw,
+  Sparkles,
   Trash2,
+  Volume2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -211,146 +215,185 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onClose}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-lg font-semibold">Settings</h1>
+    <div className="flex flex-col h-full relative overflow-hidden">
+      {/* Background mesh gradient */}
+      <div className="glass-mesh-bg" />
+
+      {/* Glass Header */}
+      <div className="liquid-glass border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onClose} className="glass-icon-button p-2 rounded-xl">
+          <ArrowLeft className="h-4 w-4 text-foreground/70" />
+        </button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">Settings</h1>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Error message */}
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
-            <AlertCircle className="h-4 w-4" />
+          <div className="glass-card p-3 border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <p className="text-sm">{error}</p>
           </div>
         )}
 
         {/* Success message */}
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-600 dark:text-green-400">
-            <Check className="h-4 w-4" />
+          <div className="glass-card p-3 border-green-500/30 bg-green-500/10 flex items-center gap-2 text-green-600 dark:text-green-400">
+            <Check className="h-4 w-4 flex-shrink-0" />
             <p className="text-sm">{successMessage}</p>
           </div>
         )}
 
         {/* Hotkey Settings */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Hotkey Mode</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
+              <Keyboard className="h-4 w-4 text-foreground/60" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm text-foreground">
+                Hotkey Mode
+              </h2>
+              <p className="text-xs text-foreground/60">
+                Configure recording shortcuts
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Recording Mode</Label>
+              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
+                Recording Mode
+              </Label>
               <Select
                 value={settings.hotkeyMode}
                 onValueChange={(value: "push-to-talk" | "toggle") =>
                   updateSettings({ hotkeyMode: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="glass-button border-0 h-10">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="glass-card border-0">
                   <SelectItem value="push-to-talk">Push to Talk</SelectItem>
                   <SelectItem value="toggle">Toggle</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground/60">
                 {settings.hotkeyMode === "push-to-talk"
                   ? "Hold the key to record, release to stop"
                   : "Press once to start, press again to stop"}
               </p>
             </div>
 
-            <Separator />
+            <div className="h-px bg-border/50" />
 
             <div className="space-y-2">
-              <Label>Push to Talk Key</Label>
+              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
+                Push to Talk Key
+              </Label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
+                <code
+                  className={cn(
+                    "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
+                    "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
+                    recordingPushToTalk && "animate-pulse border-blue-500/50"
+                  )}
+                >
                   {recordingPushToTalk
                     ? "Press any key..."
                     : settings.pushToTalkKey}
                 </code>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
+                  className="glass-button px-3 py-2 text-xs font-medium rounded-xl"
                   onClick={() => handleRecordHotkey("pushToTalk")}
                   disabled={recordingPushToTalk}
                 >
                   {recordingPushToTalk ? "Recording..." : "Change"}
-                </Button>
+                </button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Toggle Key</Label>
+              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
+                Toggle Key
+              </Label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
+                <code
+                  className={cn(
+                    "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
+                    "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
+                    recordingToggle && "animate-pulse border-blue-500/50"
+                  )}
+                >
                   {recordingToggle ? "Press any key..." : settings.toggleKey}
                 </code>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
+                  className="glass-button px-3 py-2 text-xs font-medium rounded-xl"
                   onClick={() => handleRecordHotkey("toggle")}
                   disabled={recordingToggle}
                 >
                   {recordingToggle ? "Recording..." : "Change"}
-                </Button>
+                </button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Model Management */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">AI Model</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Select and manage Whisper models for transcription
-            </p>
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
+              <Cpu className="h-4 w-4 text-foreground/60" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm text-foreground">
+                AI Model
+              </h2>
+              <p className="text-xs text-foreground/60">
+                Select and manage Whisper models
+              </p>
+            </div>
+          </div>
 
+          <div className="space-y-2">
             {availableModels.map((model) => (
               <div
                 key={model.id}
-                className={`p-3 rounded-lg border transition-colors ${
-                  selectedModel?.id === model.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-muted-foreground/50"
-                }`}
+                className={cn(
+                  "p-3 rounded-xl border transition-all cursor-pointer",
+                  "bg-white/30 dark:bg-white/5 border-white/30 dark:border-white/10",
+                  "hover:bg-white/50 dark:hover:bg-white/10",
+                  selectedModel?.id === model.id &&
+                    "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
+                )}
+                onClick={() => model.downloaded && handleSelectModel(model)}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{model.name}</span>
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm text-foreground">
+                        {model.name}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/50 dark:bg-white/10 text-foreground/60">
                         {model.size}
                       </span>
                       {model.downloaded && (
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                        <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           <Check className="h-3 w-3" />
-                          Downloaded
+                          Ready
                         </span>
                       )}
                       {selectedModel?.id === model.id && (
-                        <span className="text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                        <span className="glass-status text-xs bg-foreground/90 text-white px-2 py-0.5 rounded-full font-medium">
                           Active
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-foreground/60 mt-1">
                       {model.description}
                     </p>
                   </div>
@@ -359,20 +402,22 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                     {model.downloaded ? (
                       <>
                         {selectedModel?.id !== model.id && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleSelectModel(model)}
+                          <button
+                            className="glass-button px-2 py-1 text-xs font-medium rounded-lg"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectModel(model);
+                            }}
                           >
                             Use
-                          </Button>
+                          </button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteModel(model)}
+                        <button
+                          className="glass-icon-button p-1.5 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteModel(model);
+                          }}
                           disabled={deletingModelId === model.id}
                         >
                           {deletingModelId === model.id ? (
@@ -380,38 +425,38 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                           ) : (
                             <Trash2 className="h-3.5 w-3.5" />
                           )}
-                        </Button>
+                        </button>
                       </>
                     ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleDownloadModel(model)}
+                      <button
+                        className="glass-button px-2 py-1 text-xs font-medium rounded-lg flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadModel(model);
+                        }}
                         disabled={downloadingModelId !== null}
                       >
                         {downloadingModelId === model.id ? (
                           <>
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            <Loader2 className="h-3 w-3 animate-spin" />
                             {Math.floor(downloadProgress)}%
                           </>
                         ) : (
                           <>
-                            <Download className="h-3 w-3 mr-1" />
+                            <Download className="h-3 w-3" />
                             Download
                           </>
                         )}
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>
 
-                {/* Download progress bar */}
                 {downloadingModelId === model.id && (
                   <div className="mt-2">
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary transition-all duration-300"
+                        className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
                         style={{ width: `${downloadProgress}%` }}
                       />
                     </div>
@@ -419,21 +464,40 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 )}
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* UI Preferences */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Preferences</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Recording Indicator</Label>
-                <p className="text-xs text-muted-foreground">
-                  Show visual feedback when recording
-                </p>
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
+              <Sparkles className="h-4 w-4 text-foreground/60" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm text-foreground">
+                Preferences
+              </h2>
+              <p className="text-xs text-foreground/60">
+                Customize your experience
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            {/* Recording Indicator */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-foreground/60" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Recording Indicator
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Show visual feedback when recording
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.showRecordingIndicator}
@@ -443,14 +507,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Audio Feedback</Label>
-                <p className="text-xs text-muted-foreground">
-                  Play sound when recording starts/stops
-                </p>
+            {/* Audio Feedback */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <Volume2 className="h-4 w-4 text-foreground/60" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Audio Feedback
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Play sound when recording starts/stops
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.playAudioFeedback}
@@ -460,14 +530,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Start on Boot</Label>
-                <p className="text-xs text-muted-foreground">
-                  Launch WaveType when system starts
-                </p>
+            {/* Start on Boot */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <ChevronRight className="h-4 w-4 text-green-500" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Start on Boot
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Launch WaveType when system starts
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.autoStartOnBoot}
@@ -483,14 +559,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Minimize to Tray</Label>
-                <p className="text-xs text-muted-foreground">
-                  Keep running in system tray when closed
-                </p>
+            {/* Minimize to Tray */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <div className="w-3 h-2 border-2 border-purple-500 rounded-sm" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Minimize to Tray
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Keep running in system tray when closed
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.minimizeToTray}
@@ -500,15 +582,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Smart Text Processing</Label>
-                <p className="text-xs text-muted-foreground">
-                  Auto-format code: "camel case" → camelCase, "index dot ts" →
-                  index.ts
-                </p>
+            {/* Smart Text Processing */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                  <Sparkles className="h-4 w-4 text-cyan-500" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Smart Text Processing
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Auto-format: "camel case" → camelCase
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.postProcessingEnabled}
@@ -518,14 +605,32 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Clipboard Mode</Label>
-                <p className="text-xs text-muted-foreground">
-                  Copy text to clipboard instead of typing it
-                </p>
+            {/* Clipboard Mode */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                  <svg
+                    className="h-4 w-4 text-indigo-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Clipboard Mode
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Copy text to clipboard instead of typing
+                  </p>
+                </div>
               </div>
               <Switch
                 checked={settings.clipboardMode}
@@ -534,74 +639,102 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 }
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Data Management */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Data Management</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {storageStats && (
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-sm">
-                  <span className="font-medium">
-                    {storageStats.historyCount}
-                  </span>{" "}
-                  transcriptions in history
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleExport}
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4 mr-2" />
-                )}
-                Export Data
-              </Button>
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
+              <Database className="h-4 w-4 text-foreground/60" />
             </div>
+            <div>
+              <h2 className="font-semibold text-sm text-foreground">
+                Data Management
+              </h2>
+              <p className="text-xs text-foreground/60">
+                Export and manage your data
+              </p>
+            </div>
+          </div>
 
-            <p className="text-xs text-muted-foreground">
-              Export your settings and history to a JSON file for backup.
-            </p>
-          </CardContent>
-        </Card>
+          {storageStats && (
+            <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3">
+              <p className="text-sm">
+                <span className="font-semibold text-foreground">
+                  {storageStats.historyCount}
+                </span>
+                <span className="text-foreground/60">
+                  {" "}
+                  transcriptions in history
+                </span>
+              </p>
+            </div>
+          )}
+
+          <button
+            className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            Export Data
+          </button>
+
+          <p className="text-xs text-foreground/60 mt-2 text-center">
+            Export your settings and history to a JSON file
+          </p>
+        </div>
 
         {/* Software Updates */}
         <UpdaterView />
 
         {/* Reset Settings */}
-        <Button
-          variant="outline"
-          className="w-full text-destructive hover:text-destructive"
-          onClick={() => {
-            if (confirm("Reset all settings to defaults?")) {
-              resetSettings();
-            }
-          }}
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Reset to Defaults
-        </Button>
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-red-500/10">
+              <RotateCcw className="h-4 w-4 text-red-500" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm text-foreground">
+                Reset Settings
+              </h2>
+              <p className="text-xs text-foreground/60">
+                Restore all options to defaults
+              </p>
+            </div>
+          </div>
+          <button
+            className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-red-500 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all"
+            onClick={() => {
+              if (confirm("Reset all settings to defaults?")) {
+                resetSettings();
+              }
+            }}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reset to Defaults
+          </button>
+        </div>
 
-        {/* App Info */}
-        <div className="flex flex-col items-center py-4 text-center">
-          <Logo size="sm" />
-          <p className="text-xs text-muted-foreground">
-            Voice typing fast and privately with AI
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            © 2025 JohUniq. All rights reserved.
-          </p>
+        {/* App Info Footer */}
+        <div className="glass-card p-6 rounded-2xl overflow-hidden relative">
+          <div className="relative flex flex-col items-center text-center">
+            <div className="mb-3">
+              <Logo size="sm" />
+            </div>
+            <p className="text-xs text-foreground/60">
+              Voice typing fast and privately with AI
+            </p>
+            <div className="h-px w-16 bg-border/50 my-3" />
+            <p className="text-xs text-foreground/60">
+              © 2025 JohUniq. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
     </div>

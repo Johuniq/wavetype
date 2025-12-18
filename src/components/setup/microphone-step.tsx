@@ -1,5 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
@@ -64,7 +62,6 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
     }
   };
 
-  // Skip microphone test - the actual recording uses Rust/cpal
   const skipTest = () => {
     setStatus("granted");
     setTestCompleted(true);
@@ -73,23 +70,23 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
   const statusConfig = {
     pending: {
       icon: Mic,
-      iconClass: "text-muted-foreground",
-      bgClass: "bg-muted",
+      iconClass: "text-foreground/60",
+      bgClass: "bg-white/30 dark:bg-white/10",
     },
     checking: {
       icon: Loader2,
-      iconClass: "text-primary animate-spin",
-      bgClass: "bg-primary/10",
+      iconClass: "text-foreground/60 animate-spin",
+      bgClass: "bg-white/40 dark:bg-white/15",
     },
     granted: {
       icon: CheckCircle2,
-      iconClass: "text-green-600",
+      iconClass: "text-green-500",
       bgClass: "bg-green-500/10",
     },
     denied: {
       icon: MicOff,
-      iconClass: "text-destructive",
-      bgClass: "bg-destructive/10",
+      iconClass: "text-red-500",
+      bgClass: "bg-red-500/10",
     },
   };
 
@@ -97,108 +94,133 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
   const Icon = config.icon;
 
   return (
-    <div className="flex flex-col h-full px-6 py-8">
-      <div className="space-y-1.5 mb-6">
-        <p className="text-xs text-muted-foreground">Step 1 of 3</p>
-        <h2 className="text-lg font-semibold">Microphone Access</h2>
-        <p className="text-sm text-muted-foreground">
-          Allow microphone access to enable voice input
-        </p>
-      </div>
+    <div className="flex flex-col h-full relative overflow-hidden">
+      {/* Background mesh gradient */}
+      <div className="glass-mesh-bg" />
 
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div
-          className={cn(
-            "h-24 w-24 rounded-full flex items-center justify-center transition-all",
-            config.bgClass
-          )}
-          style={{
-            boxShadow: isTestingMic
-              ? `0 0 0 ${micLevel / 4}px hsl(var(--primary) / 0.2)`
-              : "none",
-          }}
-        >
-          <Icon className={cn("h-10 w-10", config.iconClass)} />
+      <div className="flex flex-col h-full px-6 py-8">
+        <div className="space-y-1.5 mb-6">
+          <p className="text-xs text-foreground/60 px-2 py-1 rounded-full bg-white/50 dark:bg-white/10 w-fit">
+            Step 1 of 3
+          </p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Microphone Access
+          </h2>
+          <p className="text-sm text-foreground/60">
+            Allow microphone access to enable voice input
+          </p>
         </div>
 
-        {isTestingMic && (
-          <p className="mt-4 text-sm text-muted-foreground animate-pulse">
-            Speak to test your microphone...
-          </p>
-        )}
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div
+            className={cn(
+              "h-28 w-28 rounded-full flex items-center justify-center transition-all glass-card",
+              config.bgClass
+            )}
+            style={{
+              boxShadow: isTestingMic
+                ? `0 0 0 ${micLevel / 3}px rgba(34, 197, 94, 0.3)`
+                : "none",
+            }}
+          >
+            <Icon className={cn("h-12 w-12", config.iconClass)} />
+          </div>
 
-        {status === "granted" && !isTestingMic && testCompleted && (
-          <p className="mt-4 text-sm text-green-600 font-medium">
-            Microphone ready
-          </p>
-        )}
+          {isTestingMic && (
+            <p className="mt-4 text-sm text-foreground/60 animate-pulse">
+              Speak to test your microphone...
+            </p>
+          )}
 
-        {status === "denied" && (
-          <Card className="mt-6 border-destructive/50 bg-destructive/5">
-            <CardContent className="p-4">
+          {status === "granted" && !isTestingMic && testCompleted && (
+            <p className="mt-4 text-sm text-green-600 font-medium flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Microphone ready
+            </p>
+          )}
+
+          {status === "denied" && (
+            <div className="glass-card mt-6 p-4 rounded-2xl border-red-500/20 bg-red-500/5 max-w-xs">
               <div className="flex gap-3">
-                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Permission denied</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-medium text-foreground">
+                    Permission denied
+                  </p>
+                  <p className="text-xs text-foreground/60">
                     The browser test failed, but don't worry - WaveType uses
                     native audio capture which may still work.
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
 
-        {status === "pending" && (
-          <Card className="mt-6 border-border bg-muted/30">
-            <CardContent className="p-4">
+          {status === "pending" && (
+            <div className="glass-card mt-6 p-4 rounded-2xl max-w-xs">
               <div className="flex gap-3">
-                <Info className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                <Info className="h-5 w-5 text-foreground/60 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Native Audio Capture</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-medium text-foreground">
+                    Native Audio Capture
+                  </p>
+                  <p className="text-xs text-foreground/60">
                     WaveType uses native audio capture. You can test your
                     microphone here or skip if the browser blocks access.
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
 
-      <div className="flex gap-3 pt-4">
-        <Button variant="outline" onClick={onBack} className="flex-1">
-          Back
-        </Button>
-        {status === "granted" && !isTestingMic && testCompleted ? (
-          <Button onClick={onNext} className="flex-1">
-            Continue
-          </Button>
-        ) : status === "denied" ? (
-          <div className="flex gap-2 flex-1">
-            <Button variant="outline" onClick={skipTest} className="flex-1">
-              Skip Test
-            </Button>
-            <Button onClick={requestPermission} className="flex-1">
-              Try Again
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-2 flex-1">
-            <Button variant="outline" onClick={skipTest} className="flex-1">
-              Skip
-            </Button>
-            <Button
-              onClick={requestPermission}
-              disabled={status === "checking"}
-              className="flex-1"
+        <div className="flex gap-3 pt-4">
+          <button
+            className="glass-button flex-1 py-2.5 rounded-xl text-sm font-medium"
+            onClick={onBack}
+          >
+            Back
+          </button>
+          {status === "granted" && !isTestingMic && testCompleted ? (
+            <button
+              onClick={onNext}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
             >
-              {status === "checking" ? "Checking..." : "Test Mic"}
-            </Button>
-          </div>
-        )}
+              Continue
+            </button>
+          ) : status === "denied" ? (
+            <div className="flex gap-2 flex-1">
+              <button
+                className="glass-button flex-1 py-2.5 rounded-xl text-sm font-medium"
+                onClick={skipTest}
+              >
+                Skip Test
+              </button>
+              <button
+                onClick={requestPermission}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 flex-1">
+              <button
+                className="glass-button flex-1 py-2.5 rounded-xl text-sm font-medium"
+                onClick={skipTest}
+              >
+                Skip
+              </button>
+              <button
+                onClick={requestPermission}
+                disabled={status === "checking"}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+              >
+                {status === "checking" ? "Checking..." : "Test Mic"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

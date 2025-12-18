@@ -1,5 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
@@ -133,56 +131,66 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 px-6 py-8">
-      <div className="space-y-1.5 mb-6">
-        <p className="text-xs text-muted-foreground">Step 3 of 3</p>
-        <h2 className="text-lg font-semibold">Configure Hotkey</h2>
-        <p className="text-sm text-muted-foreground">
-          Choose how to activate voice typing
-        </p>
-      </div>
+    <div className="flex flex-col h-full relative overflow-hidden">
+      {/* Background mesh gradient */}
+      <div className="glass-mesh-bg" />
 
-      <div className="flex-1 overflow-auto min-h-0 space-y-4">
-        <RadioGroup
-          value={selectedMode}
-          onValueChange={(v) => {
-            setSelectedMode(v as HotkeyMode);
-            setCustomHotkey(null);
-            setConflict(null);
-          }}
-          className="space-y-2"
-        >
-          {hotkeyOptions.map((option) => (
-            <Label
-              key={option.mode}
-              htmlFor={option.mode}
-              className={cn(
-                "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                selectedMode === option.mode
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:bg-muted/50"
-              )}
-            >
-              <RadioGroupItem
-                value={option.mode}
-                id={option.mode}
-                className="mt-0.5"
-              />
-              <div>
-                <span className="font-medium text-sm">{option.title}</span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {option.description}
-                </p>
-              </div>
-            </Label>
-          ))}
-        </RadioGroup>
+      <div className="flex flex-col h-full min-h-0 px-6 py-8">
+        <div className="space-y-1.5 mb-6">
+          <p className="text-xs text-foreground/60 px-2 py-1 rounded-full bg-white/50 dark:bg-white/10 w-fit">
+            Step 3 of 3
+          </p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Configure Hotkey
+          </h2>
+          <p className="text-sm text-foreground/60">
+            Choose how to activate voice typing
+          </p>
+        </div>
 
-        <Card>
-          <CardContent className="p-4 space-y-3">
+        <div className="flex-1 overflow-auto min-h-0 space-y-4">
+          <RadioGroup
+            value={selectedMode}
+            onValueChange={(v) => {
+              setSelectedMode(v as HotkeyMode);
+              setCustomHotkey(null);
+              setConflict(null);
+            }}
+            className="space-y-2"
+          >
+            {hotkeyOptions.map((option) => (
+              <Label
+                key={option.mode}
+                htmlFor={option.mode}
+                className={cn(
+                  "flex items-start gap-3 p-4 rounded-2xl cursor-pointer transition-all glass-card",
+                  selectedMode === option.mode &&
+                    "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
+                )}
+              >
+                <RadioGroupItem
+                  value={option.mode}
+                  id={option.mode}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-sm text-foreground">
+                    {option.title}
+                  </span>
+                  <p className="text-xs text-foreground/60 mt-0.5">
+                    {option.description}
+                  </p>
+                </div>
+              </Label>
+            ))}
+          </RadioGroup>
+
+          <div className="glass-card p-4 rounded-2xl space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Hotkey</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm font-medium text-foreground">
+                Hotkey
+              </span>
+              <span className="text-xs text-foreground/60">
                 Click to change
               </span>
             </div>
@@ -193,94 +201,101 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
               onKeyDown={handleKeyDown}
               onBlur={() => setIsRecordingHotkey(false)}
               className={cn(
-                "w-full p-3 rounded-md border-2 border-dashed text-center transition-colors focus:outline-none",
+                "w-full p-3 rounded-xl border-2 border-dashed text-center transition-all focus:outline-none",
+                "bg-white/30 dark:bg-white/10",
                 isRecordingHotkey
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-muted-foreground/50"
+                  ? "border-foreground/50 bg-foreground/5"
+                  : "border-white/30 dark:border-white/10 hover:border-foreground/30"
               )}
             >
               {isRecordingHotkey ? (
-                <span className="text-sm text-primary">
+                <span className="text-sm text-foreground/60">
                   {recordedKeys.length > 0
                     ? recordedKeys.join(" + ") + " ..."
                     : "Press a key combination..."}
                 </span>
               ) : (
-                <span className="text-sm font-mono font-medium">
+                <span className="text-sm font-mono font-medium text-foreground">
                   {currentHotkey}
                 </span>
               )}
             </button>
 
             {conflict && (
-              <div className="flex items-center gap-2 text-sm text-amber-600">
+              <div className="flex items-center gap-2 text-sm text-amber-600 p-2 rounded-lg bg-amber-500/10">
                 <AlertTriangle className="h-4 w-4" />
                 <span>{conflict}</span>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card className="bg-muted/50">
-          <CardContent className="p-4">
+          <div className="glass-card p-4 rounded-2xl">
             <div className="flex items-start gap-2">
-              <Keyboard className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div className="text-xs text-muted-foreground space-y-1">
+              <Keyboard className="h-4 w-4 text-foreground/60 mt-0.5" />
+              <div className="text-xs text-foreground/60 space-y-1">
                 <p>Use modifier keys (Ctrl, Alt, Shift) + a letter</p>
                 <p>Avoid common shortcuts like Ctrl+C or Ctrl+V</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Output Mode Selection */}
-        <div className="space-y-2">
-          <span className="text-sm font-medium">Output Mode</span>
-          <RadioGroup
-            value={selectedOutputMode}
-            onValueChange={(v) => setSelectedOutputMode(v as OutputMode)}
-            className="space-y-2"
-          >
-            {outputOptions.map((option) => (
-              <Label
-                key={option.mode}
-                htmlFor={`output-${option.mode}`}
-                className={cn(
-                  "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                  selectedOutputMode === option.mode
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:bg-muted/50"
-                )}
-              >
-                <RadioGroupItem
-                  value={option.mode}
-                  id={`output-${option.mode}`}
-                  className="mt-0.5"
-                />
-                <option.icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                <div>
-                  <span className="font-medium text-sm">{option.title}</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {option.description}
-                  </p>
-                </div>
-              </Label>
-            ))}
-          </RadioGroup>
+          {/* Output Mode Selection */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-foreground">
+              Output Mode
+            </span>
+            <RadioGroup
+              value={selectedOutputMode}
+              onValueChange={(v) => setSelectedOutputMode(v as OutputMode)}
+              className="space-y-2"
+            >
+              {outputOptions.map((option) => (
+                <Label
+                  key={option.mode}
+                  htmlFor={`output-${option.mode}`}
+                  className={cn(
+                    "flex items-start gap-3 p-4 rounded-2xl cursor-pointer transition-all glass-card",
+                    selectedOutputMode === option.mode &&
+                      "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
+                  )}
+                >
+                  <RadioGroupItem
+                    value={option.mode}
+                    id={`output-${option.mode}`}
+                    className="mt-0.5"
+                  />
+                  <div className="p-2 rounded-lg bg-white/30 dark:bg-white/10">
+                    <option.icon className="h-4 w-4 text-foreground/60" />
+                  </div>
+                  <div>
+                    <span className="font-medium text-sm text-foreground">
+                      {option.title}
+                    </span>
+                    <p className="text-xs text-foreground/60 mt-0.5">
+                      {option.description}
+                    </p>
+                  </div>
+                </Label>
+              ))}
+            </RadioGroup>
+          </div>
         </div>
-      </div>
 
-      <div className="flex gap-3 pt-4 border-t mt-4">
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button
-          onClick={handleContinue}
-          disabled={conflict !== null}
-          className="flex-1"
-        >
-          Complete Setup
-        </Button>
+        <div className="flex gap-3 pt-4 border-t border-white/10 mt-4">
+          <button
+            className="glass-button py-2.5 px-4 rounded-xl text-sm font-medium"
+            onClick={onBack}
+          >
+            Back
+          </button>
+          <button
+            onClick={handleContinue}
+            disabled={conflict !== null}
+            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+          >
+            Complete Setup
+          </button>
+        </div>
       </div>
     </div>
   );

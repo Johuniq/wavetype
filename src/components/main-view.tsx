@@ -3,8 +3,6 @@ import { LicenseView } from "@/components/license-view";
 import { Logo } from "@/components/logo";
 import { SettingsView } from "@/components/settings-view";
 import { TranscribeView } from "@/components/transcribe-view";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
@@ -33,7 +31,6 @@ import {
   Settings,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SpeakingOverlay } from "./ui/speaking-overlay";
 
 // Global flags to prevent duplicate listeners and calls
 let hotkeyListenersSetup = false;
@@ -399,162 +396,186 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   // Show loading state while model is loading
   if (isLoadingModel) {
     return (
-      <div className="flex flex-col h-full p-6 items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-        <p className="mt-4 text-sm text-muted-foreground">
-          Loading AI model...
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {selectedModel?.name || "Base"} model
-        </p>
+      <div className="relative flex flex-col h-full items-center justify-center overflow-hidden">
+        {/* Background mesh gradient */}
+        <div className="glass-mesh-bg" />
+
+        <div className="glass-card p-8 flex flex-col items-center">
+          <div className="glass-orb h-20 w-20 flex items-center justify-center glass-float">
+            <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
+          </div>
+          <p className="mt-6 text-sm font-medium text-foreground/80">
+            Loading AI model...
+          </p>
+          <p className="text-xs text-foreground/60 mt-1">
+            {selectedModel?.name || "Base"} model
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full p-6">
+    <div className="relative flex flex-col h-full overflow-hidden">
+      {/* Background mesh gradient */}
+      <div className="glass-mesh-bg" />
+
       {/* Full-screen speaking animation overlay */}
-      <SpeakingOverlay
+      {/* <SpeakingOverlay
         visible={
           settings.showRecordingIndicator && recordingStatus === "recording"
         }
-      />
-      <div className="flex items-center justify-between">
+      /> */}
+
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between px-6 pt-6">
         <Logo size="sm" showText={false} />
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+        <div className="flex items-center gap-2">
+          <button
+            className="glass-button h-9 w-9 flex items-center justify-center"
             onClick={() => setShowTranscribe(true)}
             title="Transcribe Audio File"
           >
-            <FileAudio className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            <FileAudio className="h-4 w-4 text-foreground/70" />
+          </button>
+          <button
+            className="glass-button h-9 w-9 flex items-center justify-center"
             onClick={() => setShowHistory(true)}
             title="History"
           >
-            <History className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            <History className="h-4 w-4 text-foreground/70" />
+          </button>
+          <button
+            className="glass-button h-9 w-9 flex items-center justify-center"
             onClick={() => setShowLicense(true)}
             title="License"
           >
-            <Key className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            <Key className="h-4 w-4 text-foreground/70" />
+          </button>
+          <button
+            className="glass-button h-9 w-9 flex items-center justify-center"
             onClick={() => setShowSettings(true)}
             title="Settings"
           >
-            <Settings className="h-4 w-4" />
-          </Button>
+            <Settings className="h-4 w-4 text-foreground/70" />
+          </button>
         </div>
       </div>
 
       {/* Trial banner */}
       {trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
-        <div className="mt-2 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 text-amber-500" />
-            <span className="text-xs text-amber-600 dark:text-amber-400">
-              Trial: {trialDaysRemaining} day
-              {trialDaysRemaining !== 1 ? "s" : ""} remaining
-            </span>
+        <div className="relative z-10 mx-6 mt-4">
+          <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Trial: {trialDaysRemaining} day
+                {trialDaysRemaining !== 1 ? "s" : ""} remaining
+              </span>
+            </div>
+            <button
+              className="glass-button px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+              onClick={() => setShowLicense(true)}
+            >
+              Upgrade
+            </button>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-            onClick={() => setShowLicense(true)}
-          >
-            Upgrade
-          </Button>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center">
+      {/* Main content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
+        {/* Recording orb */}
         <button
           onClick={toggleRecording}
           disabled={!isModelLoaded || recordingStatus === "processing"}
           className={cn(
-            "h-28 w-28 rounded-full flex items-center justify-center transition-all",
-            config.bgClass,
-            recordingStatus === "recording" &&
-              "ring-4 ring-destructive/30 animate-pulse",
+            "glass-orb h-32 w-32 flex items-center justify-center transition-all duration-300",
+            recordingStatus === "recording" && "glass-orb-recording",
+            recordingStatus === "processing" && "glass-orb-processing",
             !isModelLoaded && "opacity-50 cursor-not-allowed"
           )}
         >
           {recordingStatus === "processing" ? (
-            <Loader2
-              className={cn("h-12 w-12 animate-spin", config.iconClass)}
-            />
+            <Loader2 className="h-12 w-12 animate-spin text-white" />
           ) : (
-            <Mic className={cn("h-12 w-12", config.iconClass)} />
+            <Mic
+              className={cn(
+                "h-12 w-12 transition-colors",
+                recordingStatus === "recording"
+                  ? "text-white"
+                  : "text-foreground/60"
+              )}
+            />
           )}
         </button>
 
+        {/* Status label */}
         <p
           className={cn(
-            "mt-4 text-sm font-medium",
+            "mt-5 text-sm font-medium tracking-wide",
             recordingStatus === "recording"
-              ? "text-destructive"
-              : "text-muted-foreground"
+              ? "text-red-500 dark:text-red-400"
+              : recordingStatus === "processing"
+              ? "text-blue-500 dark:text-blue-400"
+              : "text-foreground/60"
           )}
         >
           {config.label}
         </p>
 
+        {/* Error message */}
         {errorMessage && (
-          <div className="mt-3 flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <p className="text-xs">{errorMessage}</p>
+          <div className="mt-4 glass-card px-4 py-2.5 flex items-center gap-2.5 border-red-200 dark:border-red-800/50">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <p className="text-xs text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
           </div>
         )}
 
-        <p className="mt-2 text-xs text-muted-foreground">
-          Press{" "}
-          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
-            {currentHotkey}
-          </code>{" "}
+        {/* Hotkey hint */}
+        <p className="mt-4 text-xs text-foreground/60 flex items-center gap-2">
+          Press
+          <span className="glass-kbd">{currentHotkey}</span>
           to{" "}
           {settings.hotkeyMode === "push-to-talk" ? "hold and speak" : "toggle"}
         </p>
 
+        {/* Last transcription */}
         {lastTranscription && (
-          <Card className="w-full max-w-xs mt-6">
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground mb-1">
-                Last transcription
-              </p>
-              <p className="text-sm">{lastTranscription}</p>
-            </CardContent>
-          </Card>
+          <div className="glass-transcription w-full max-w-xs mt-8 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-foreground/50 mb-2 font-medium">
+              Last transcription
+            </p>
+            <p className="text-sm text-foreground/90 leading-relaxed">
+              {lastTranscription}
+            </p>
+          </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              isModelLoaded ? "bg-green-500" : "bg-yellow-500"
-            )}
-          />
-          <span>{selectedModel?.name || "Base"}</span>
+      {/* Footer status bar */}
+      <div className="relative z-10 px-6 pb-6">
+        <div className="glass-divider mb-4" />
+        <div className="flex items-center justify-between">
+          <div className="glass-status">
+            <span
+              className={cn(
+                "status-dot",
+                isModelLoaded ? "status-dot-active" : "status-dot-warning"
+              )}
+            />
+            <span className="text-foreground/70 font-medium">
+              {selectedModel?.name || "Base"}
+            </span>
+          </div>
+          <div className="glass-badge text-foreground/60">
+            {settings.hotkeyMode === "push-to-talk"
+              ? "Push to Talk"
+              : "Toggle Mode"}
+          </div>
         </div>
-        <span>
-          {settings.hotkeyMode === "push-to-talk" ? "Push to Talk" : "Toggle"}
-        </span>
       </div>
     </div>
   );

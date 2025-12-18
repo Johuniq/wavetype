@@ -3,6 +3,7 @@
 mod audio;
 mod database;
 mod downloader;
+mod error_reporting;
 mod license;
 mod post_process;
 mod text_inject;
@@ -11,9 +12,10 @@ mod transcription;
 use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
+use error_reporting::{ErrorReporter, ErrorReport, ErrorSeverity, ErrorCategory, ErrorStats};
 use license::{LicenseClient, LicenseStatus, get_device_label, get_device_meta};
 use post_process::PostProcessor;
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
@@ -228,24 +230,24 @@ fn start_recording(
         return Err(CommandError::Recording("Rate limit exceeded. Please wait before starting another recording.".to_string()));
     }
     
-    println!("[DEBUG] start_recording called");
+    debug!("start_recording called");
     let mut recorder_guard = recorder.0.lock().unwrap();
     
     if recorder_guard.is_none() {
-        println!("[DEBUG] Creating new AudioRecorder");
+        debug!("Creating new AudioRecorder");
         *recorder_guard = Some(AudioRecorder::new().map_err(|e| {
-            println!("[ERROR] Failed to create AudioRecorder: {}", e);
+            error!("Failed to create AudioRecorder: {}", e);
             CommandError::Recording(e)
         })?)
     }
     
     if let Some(ref mut rec) = *recorder_guard {
-        println!("[DEBUG] Starting recording...");
+        debug!("Starting recording...");
         rec.start_recording().map_err(|e| {
-            println!("[ERROR] Failed to start recording: {}", e);
+            error!("Failed to start recording: {}", e);
             CommandError::Recording(e)
         })?;
-        println!("[DEBUG] Recording started successfully");
+        debug!("Recording started successfully");
     }
     
     Ok(())
@@ -649,7 +651,12 @@ fn add_transcription(
     }
     
     // Validate model_id against allowed values
-    if !["tiny", "base", "small", "medium", "large"].contains(&model_id.as_str()) {
+    const VALID_MODEL_IDS: &[&str] = &[
+        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
+        "tiny.en", "base.en", "small.en", "medium.en",
+        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3"
+    ];
+    if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Invalid model ID".to_string())));
     }
     
@@ -671,11 +678,18 @@ fn add_transcription(
 fn get_transcription_history(
     db: State<DbState>,
     limit: Option<i32>,
+    offset: Option<i32>,
 ) -> CommandResult<Vec<TranscriptionHistory>> {
     // Validate and cap limit
     let safe_limit = limit.unwrap_or(50).min(1000).max(1);
-    db.0.get_transcription_history(safe_limit)
+    let safe_offset = offset.unwrap_or(0).max(0);
+    db.0.get_transcription_history(safe_limit, safe_offset)
         .map_err(Into::into)
+}
+
+#[tauri::command]
+fn get_transcription_history_count(db: State<DbState>) -> CommandResult<i64> {
+    db.0.get_transcription_history_count().map_err(Into::into)
 }
 
 #[tauri::command]
@@ -1178,6 +1192,153 @@ fn get_app_name() -> String {
     APP_NAME.to_string()
 }
 
+// Error Reporting Commands
+
+#[tauri::command]
+async fn report_error(
+    app: tauri::AppHandle,
+    category: String,
+    message: String,
+    severity: String,
+    stack_trace: Option<String>,
+    user_action: Option<String>,
+    context: Option<std::collections::HashMap<String, String>>,
+) -> Result<(), CommandError> {
+    let severity = match severity.to_lowercase().as_str() {
+        "debug" => ErrorSeverity::Debug,
+        "info" => ErrorSeverity::Info,
+        "warning" => ErrorSeverity::Warning,
+        "error" => ErrorSeverity::Error,
+        "critical" => ErrorSeverity::Critical,
+        "fatal" => ErrorSeverity::Fatal,
+        _ => ErrorSeverity::Error,
+    };
+    
+    let category = match category.to_lowercase().as_str() {
+        "transcription" => ErrorCategory::Transcription,
+        "audio" => ErrorCategory::Audio,
+        "model" => ErrorCategory::Model,
+        "database" => ErrorCategory::Database,
+        "network" => ErrorCategory::Network,
+        "filesystem" => ErrorCategory::FileSystem,
+        "license" => ErrorCategory::License,
+        "ui" => ErrorCategory::Ui,
+        "system" => ErrorCategory::System,
+        "configuration" => ErrorCategory::Configuration,
+        _ => ErrorCategory::Unknown,
+    };
+    
+    if let Some(reporter) = ErrorReporter::global() {
+        let mut report = ErrorReport::new(severity, category, message);
+        
+        if let Some(trace) = stack_trace {
+            report = report.with_details(trace);
+        }
+        
+        if let Some(action) = user_action {
+            report = report.with_context("user_action", action);
+        }
+        
+        if let Some(ctx) = context {
+            for (key, value) in ctx {
+                report = report.with_context(key, value);
+            }
+        }
+        
+        reporter.report(report);
+        
+        // Persist to disk periodically
+        if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+            let _ = reporter.persist_to_file(&app_data_dir);
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_error_reports(limit: Option<usize>) -> Result<Vec<ErrorReport>, CommandError> {
+    if let Some(reporter) = ErrorReporter::global() {
+        Ok(reporter.get_reports(limit))
+    } else {
+        Ok(vec![])
+    }
+}
+
+#[tauri::command]
+async fn get_error_stats() -> Result<ErrorStats, CommandError> {
+    if let Some(reporter) = ErrorReporter::global() {
+        Ok(reporter.get_stats())
+    } else {
+        Ok(ErrorStats {
+            total_errors: 0,
+            by_category: std::collections::HashMap::new(),
+            by_severity: std::collections::HashMap::new(),
+        })
+    }
+}
+
+#[tauri::command]
+async fn export_error_reports(
+    app: tauri::AppHandle,
+    format: Option<String>,
+) -> Result<String, CommandError> {
+    let format_str = format.unwrap_or_else(|| "json".to_string());
+    
+    let content = if let Some(reporter) = ErrorReporter::global() {
+        match format_str.to_lowercase().as_str() {
+            "markdown" | "md" => reporter.export_to_markdown(),
+            _ => reporter.export_to_json(),
+        }
+    } else {
+        "{}".to_string()
+    };
+    
+    // Also save to file
+    if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+        let reports_dir = app_data_dir.join("reports");
+        std::fs::create_dir_all(&reports_dir).ok();
+        
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let extension = if format_str == "markdown" || format_str == "md" { "md" } else { "json" };
+        let filename = format!("error_report_{}.{}", timestamp, extension);
+        let filepath = reports_dir.join(&filename);
+        
+        std::fs::write(&filepath, &content)?;
+        
+        info!("Error report exported to: {:?}", filepath);
+    }
+    
+    Ok(content)
+}
+
+#[tauri::command]
+async fn clear_error_reports() -> Result<(), CommandError> {
+    if let Some(reporter) = ErrorReporter::global() {
+        reporter.clear();
+    }
+    info!("Error reports cleared");
+    Ok(())
+}
+
+#[tauri::command]
+async fn load_error_reports(app: tauri::AppHandle) -> Result<usize, CommandError> {
+    if let Some(reporter) = ErrorReporter::global() {
+        if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+            match reporter.load_from_file(&app_data_dir) {
+                Ok(count) => {
+                    info!("Loaded {} error reports from disk", count);
+                    return Ok(count);
+                }
+                Err(e) => {
+                    warn!("Failed to load error reports: {}", e);
+                }
+            }
+        }
+    }
+    Ok(0)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger
@@ -1213,6 +1374,10 @@ pub fn run() {
                 .expect("Failed to get app data directory");
             
             info!("App data directory: {:?}", app_data_dir);
+            
+            // Initialize error reporter early for crash handling
+            let error_log_dir = app_data_dir.join("logs");
+            ErrorReporter::init(error_log_dir);
             
             let db = Database::new(app_data_dir.clone()).expect("Failed to initialize database");
             app.manage(DbState(Arc::new(db)));
@@ -1303,6 +1468,7 @@ pub fn run() {
             // Transcription history
             add_transcription,
             get_transcription_history,
+            get_transcription_history_count,
             clear_transcription_history,
             delete_transcription,
             // License
@@ -1324,6 +1490,13 @@ pub fn run() {
             // App info
             get_app_version,
             get_app_name,
+            // Error reporting
+            report_error,
+            get_error_reports,
+            get_error_stats,
+            export_error_reports,
+            clear_error_reports,
+            load_error_reports,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

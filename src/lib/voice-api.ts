@@ -391,11 +391,17 @@ export interface TranscriptionHistoryItem {
 }
 
 export async function getTranscriptionHistory(
-  limit?: number
+  limit?: number,
+  offset?: number
 ): Promise<TranscriptionHistoryItem[]> {
   return await invoke<TranscriptionHistoryItem[]>("get_transcription_history", {
     limit,
+    offset,
   });
+}
+
+export async function getTranscriptionHistoryCount(): Promise<number> {
+  return await invoke<number>("get_transcription_history_count");
 }
 
 export async function addTranscription(
@@ -418,4 +424,133 @@ export async function clearTranscriptionHistory(): Promise<void> {
 
 export async function deleteTranscriptionItem(id: number): Promise<void> {
   await invoke("delete_transcription", { id });
+}
+
+// ============================================
+// Error Reporting API
+// ============================================
+
+export type ErrorSeverity =
+  | "debug"
+  | "info"
+  | "warning"
+  | "error"
+  | "critical"
+  | "fatal";
+
+export type ErrorCategory =
+  | "transcription"
+  | "audio"
+  | "model"
+  | "database"
+  | "network"
+  | "filesystem"
+  | "license"
+  | "ui"
+  | "system"
+  | "configuration"
+  | "unknown";
+
+export interface ErrorReport {
+  id: string;
+  timestamp: string;
+  severity: ErrorSeverity;
+  category: ErrorCategory;
+  message: string;
+  details?: string;
+  stack_trace?: string;
+  user_action?: string;
+  context?: Record<string, string>;
+  occurrence_count: number;
+  app_version: string;
+  os_info: string;
+}
+
+export interface ErrorStats {
+  total_errors: number;
+  by_category: Record<string, number>;
+  by_severity: Record<string, number>;
+}
+
+/**
+ * Report an error to the error reporting system
+ */
+export async function reportError(
+  category: ErrorCategory,
+  message: string,
+  severity: ErrorSeverity = "error",
+  options?: {
+    stackTrace?: string;
+    userAction?: string;
+    context?: Record<string, string>;
+  }
+): Promise<void> {
+  await invoke("report_error", {
+    category,
+    message,
+    severity,
+    stackTrace: options?.stackTrace,
+    userAction: options?.userAction,
+    context: options?.context,
+  });
+}
+
+/**
+ * Get recent error reports
+ */
+export async function getErrorReports(limit?: number): Promise<ErrorReport[]> {
+  return await invoke<ErrorReport[]>("get_error_reports", { limit });
+}
+
+/**
+ * Get error statistics
+ */
+export async function getErrorStats(): Promise<ErrorStats> {
+  return await invoke<ErrorStats>("get_error_stats");
+}
+
+/**
+ * Export error reports to a file and get the content
+ */
+export async function exportErrorReports(
+  format: "json" | "markdown" = "json"
+): Promise<string> {
+  return await invoke<string>("export_error_reports", { format });
+}
+
+/**
+ * Clear all error reports from memory
+ */
+export async function clearErrorReports(): Promise<void> {
+  await invoke("clear_error_reports");
+}
+
+/**
+ * Load error reports from disk
+ */
+export async function loadErrorReports(): Promise<number> {
+  return await invoke<number>("load_error_reports");
+}
+
+/**
+ * Helper to capture and report errors from async operations
+ */
+export async function withErrorReporting<T>(
+  operation: () => Promise<T>,
+  category: ErrorCategory,
+  userAction?: string
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const stackTrace = error instanceof Error ? error.stack : undefined;
+
+    await reportError(category, errorMessage, "error", {
+      stackTrace,
+      userAction,
+    });
+
+    throw error;
+  }
 }

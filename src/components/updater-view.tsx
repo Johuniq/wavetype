@@ -1,13 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   checkForUpdates,
@@ -85,9 +75,7 @@ export function UpdaterView() {
   const getStatusIcon = () => {
     switch (status.status) {
       case "checking":
-        return (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        );
+        return <Loader2 className="h-5 w-5 animate-spin text-foreground/60" />;
       case "available":
         return <Sparkles className="h-5 w-5 text-yellow-500" />;
       case "not-available":
@@ -99,7 +87,7 @@ export function UpdaterView() {
       case "error":
         return <AlertCircle className="h-5 w-5 text-destructive" />;
       default:
-        return <RefreshCw className="h-5 w-5 text-muted-foreground" />;
+        return <RefreshCw className="h-5 w-5 text-foreground/60" />;
     }
   };
 
@@ -123,88 +111,98 @@ export function UpdaterView() {
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <div className="glass-card p-4 rounded-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
             {getStatusIcon()}
-            <CardTitle className="text-base">Software Updates</CardTitle>
           </div>
-          <Badge variant="outline" className="font-mono text-xs">
-            v{currentVersion}
-          </Badge>
+          <div>
+            <h2 className="font-semibold text-sm text-foreground">
+              Software Updates
+            </h2>
+            <p className="text-xs text-foreground/60">{getStatusMessage()}</p>
+          </div>
         </div>
-        <CardDescription>{getStatusMessage()}</CardDescription>
-      </CardHeader>
+        <span className="px-2 py-1 rounded-lg bg-white/50 dark:bg-white/10 border border-white/30 dark:border-white/10 font-mono text-xs text-foreground/60">
+          v{currentVersion}
+        </span>
+      </div>
 
-      <CardContent className="space-y-4">
-        {/* Progress bar for downloading */}
-        {status.status === "downloading" && progress && (
-          <div className="space-y-2">
-            <Progress
-              value={
-                progress.total
-                  ? (progress.downloaded / progress.total) * 100
-                  : undefined
-              }
-              className="h-2"
+      {/* Progress bar for downloading */}
+      {status.status === "downloading" && progress && (
+        <div className="mb-3">
+          <div className="h-2 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
+              style={{
+                width: progress.total
+                  ? `${(progress.downloaded / progress.total) * 100}%`
+                  : "50%",
+              }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Release notes */}
+      {(status.status === "available" || status.status === "ready") &&
+        status.info.body && (
+          <div className="rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 p-3 mb-3">
+            <p className="font-medium text-xs text-foreground mb-1">
+              What's new:
+            </p>
+            <p className="text-xs text-foreground/70 whitespace-pre-wrap line-clamp-4">
+              {status.info.body}
+            </p>
           </div>
         )}
 
-        {/* Release notes */}
-        {(status.status === "available" || status.status === "ready") &&
-          status.info.body && (
-            <div className="rounded-md bg-muted p-3 text-sm">
-              <p className="font-medium mb-1">What's new:</p>
-              <p className="text-muted-foreground whitespace-pre-wrap line-clamp-4">
-                {status.info.body}
-              </p>
-            </div>
-          )}
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        {status.status === "idle" ||
+        status.status === "not-available" ||
+        status.status === "error" ? (
+          <button
+            onClick={handleCheckForUpdates}
+            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Check for Updates
+          </button>
+        ) : null}
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          {status.status === "idle" ||
-          status.status === "not-available" ||
-          status.status === "error" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCheckForUpdates}
-              className="flex-1"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Check for Updates
-            </Button>
-          ) : null}
+        {status.status === "checking" && (
+          <button
+            disabled
+            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium opacity-70 cursor-not-allowed"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Checking...
+          </button>
+        )}
 
-          {status.status === "checking" && (
-            <Button variant="outline" size="sm" disabled className="flex-1">
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Checking...
-            </Button>
-          )}
+        {status.status === "available" && (
+          <button
+            onClick={handleDownloadAndInstall}
+            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+          >
+            <Download className="h-4 w-4" />
+            Download & Install
+          </button>
+        )}
 
-          {status.status === "available" && (
-            <Button
-              size="sm"
-              onClick={handleDownloadAndInstall}
-              className="flex-1"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download & Install
-            </Button>
-          )}
-
-          {status.status === "ready" && (
-            <Button size="sm" onClick={handleRelaunch} className="flex-1">
-              <Rocket className="h-4 w-4 mr-2" />
-              Restart Now
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        {status.status === "ready" && (
+          <button
+            onClick={handleRelaunch}
+            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+          >
+            <Rocket className="h-4 w-4" />
+            Restart Now
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

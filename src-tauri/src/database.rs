@@ -336,6 +336,27 @@ impl Database {
     }
 
     pub fn update_setting(&self, key: &str, value: &str) -> Result<()> {
+        // Security: Whitelist allowed column names to prevent SQL injection
+        const ALLOWED_KEYS: &[&str] = &[
+            "push_to_talk_key",
+            "toggle_key",
+            "hotkey_mode",
+            "language",
+            "selected_model_id",
+            "show_recording_indicator",
+            "play_audio_feedback",
+            "auto_start_on_boot",
+            "minimize_to_tray",
+            "post_processing_enabled",
+            "clipboard_mode",
+        ];
+
+        if !ALLOWED_KEYS.contains(&key) {
+            return Err(rusqlite::Error::InvalidParameterName(
+                format!("Invalid setting key: {}", key),
+            ).into());
+        }
+
         let conn = self.conn.lock().unwrap();
         let query = format!(
             "UPDATE settings SET {} = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
@@ -485,16 +506,16 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
-    pub fn get_transcription_history(&self, limit: i32) -> Result<Vec<TranscriptionHistory>> {
+    pub fn get_transcription_history(&self, limit: i32, offset: i32) -> Result<Vec<TranscriptionHistory>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, text, model_id, language, duration_ms, created_at
              FROM transcription_history
              ORDER BY created_at DESC
-             LIMIT ?1"
+             LIMIT ?1 OFFSET ?2"
         )?;
         
-        let history = stmt.query_map(params![limit], |row| {
+        let history = stmt.query_map(params![limit, offset], |row| {
             Ok(TranscriptionHistory {
                 id: row.get(0)?,
                 text: row.get(1)?,
@@ -507,6 +528,16 @@ impl Database {
         .collect::<Result<Vec<_>>>()?;
         
         Ok(history)
+    }
+
+    pub fn get_transcription_history_count(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM transcription_history",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
     }
 
     pub fn clear_transcription_history(&self) -> Result<()> {

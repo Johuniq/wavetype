@@ -44,6 +44,11 @@ impl ModelDownloader {
         let url = crate::transcription::get_model_url(model_id)
             .ok_or_else(|| format!("Unknown model: {}", model_id))?;
 
+        // Security: Enforce HTTPS only
+        if !url.starts_with("https://") {
+            return Err("Security error: Only HTTPS URLs are allowed for downloads".to_string());
+        }
+
         // Create models directory if it doesn't exist
         tokio::fs::create_dir_all(&self.models_dir)
             .await
