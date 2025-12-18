@@ -20,6 +20,7 @@ export interface DbAppSettings {
   auto_start_on_boot: boolean;
   minimize_to_tray: boolean;
   post_processing_enabled: boolean;
+  clipboard_mode: boolean;
 }
 
 export interface DbAppState {
@@ -174,6 +175,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     showRecordingIndicator: db.show_recording_indicator,
     playAudioFeedback: db.play_audio_feedback,
     postProcessingEnabled: db.post_processing_enabled,
+    clipboardMode: db.clipboard_mode,
     autoStartOnBoot: db.auto_start_on_boot,
     minimizeToTray: db.minimize_to_tray,
   };
@@ -189,6 +191,7 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     show_recording_indicator: settings.showRecordingIndicator,
     play_audio_feedback: settings.playAudioFeedback,
     post_processing_enabled: settings.postProcessingEnabled,
+    clipboard_mode: settings.clipboardMode,
     auto_start_on_boot: settings.autoStartOnBoot,
     minimize_to_tray: settings.minimizeToTray,
   };

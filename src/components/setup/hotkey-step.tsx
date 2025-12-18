@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
-import { AlertTriangle, Keyboard } from "lucide-react";
+import { AlertTriangle, Clipboard, Keyboard, Type } from "lucide-react";
 import { useState } from "react";
 
 interface HotkeyStepProps {
@@ -13,6 +13,7 @@ interface HotkeyStepProps {
 }
 
 type HotkeyMode = "push-to-talk" | "toggle";
+type OutputMode = "inject" | "clipboard";
 
 const hotkeyOptions = [
   {
@@ -29,10 +30,28 @@ const hotkeyOptions = [
   },
 ];
 
+const outputOptions = [
+  {
+    mode: "inject" as const,
+    title: "Type Text",
+    description: "Automatically type text where your cursor is",
+    icon: Type,
+  },
+  {
+    mode: "clipboard" as const,
+    title: "Copy to Clipboard",
+    description: "Copy text to clipboard for manual pasting",
+    icon: Clipboard,
+  },
+];
+
 export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
   const { settings, updateSettings } = useAppStore();
   const [selectedMode, setSelectedMode] = useState<HotkeyMode>(
     settings.hotkeyMode
+  );
+  const [selectedOutputMode, setSelectedOutputMode] = useState<OutputMode>(
+    settings.clipboardMode ? "clipboard" : "inject"
   );
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
@@ -98,6 +117,7 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
   const handleContinue = () => {
     const newSettings: Partial<typeof settings> = {
       hotkeyMode: selectedMode,
+      clipboardMode: selectedOutputMode === "clipboard",
     };
 
     if (customHotkey) {
@@ -212,6 +232,42 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
             </div>
           </CardContent>
         </Card>
+
+        {/* Output Mode Selection */}
+        <div className="space-y-2">
+          <span className="text-sm font-medium">Output Mode</span>
+          <RadioGroup
+            value={selectedOutputMode}
+            onValueChange={(v) => setSelectedOutputMode(v as OutputMode)}
+            className="space-y-2"
+          >
+            {outputOptions.map((option) => (
+              <Label
+                key={option.mode}
+                htmlFor={`output-${option.mode}`}
+                className={cn(
+                  "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                  selectedOutputMode === option.mode
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                )}
+              >
+                <RadioGroupItem
+                  value={option.mode}
+                  id={`output-${option.mode}`}
+                  className="mt-0.5"
+                />
+                <option.icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div>
+                  <span className="font-medium text-sm">{option.title}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {option.description}
+                  </p>
+                </div>
+              </Label>
+            ))}
+          </RadioGroup>
+        </div>
       </div>
 
       <div className="flex gap-3 pt-4 border-t mt-4">

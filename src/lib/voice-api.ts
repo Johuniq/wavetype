@@ -4,6 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 // ============================================
 // Types
@@ -207,19 +208,119 @@ export async function stopAndTranscribe(
   }
 }
 
+// Voice command control sequences
+const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
+  // Editing commands
+  "[[DELETE_LAST]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "backspace_word" });
+  },
+  "[[UNDO]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "undo" });
+  },
+  "[[REDO]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "redo" });
+  },
+  "[[SELECT_ALL]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_all" });
+  },
+  "[[COPY]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "copy" });
+  },
+  "[[CUT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "cut" });
+  },
+  "[[PASTE]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "paste" });
+  },
+  "[[BACKSPACE]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "backspace" });
+  },
+  "[[DELETE_WORD]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "delete_word" });
+  },
+  "[[DELETE_LINE]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "delete_line" });
+  },
+  "[[ENTER]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "enter" });
+  },
+  "[[TAB]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "tab" });
+  },
+  "[[ESCAPE]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "escape" });
+  },
+  // Cursor movement commands
+  "[[LEFT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "left" });
+  },
+  "[[RIGHT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "right" });
+  },
+  "[[UP]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "up" });
+  },
+  "[[DOWN]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "down" });
+  },
+  "[[HOME]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "home" });
+  },
+  "[[END]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "end" });
+  },
+  "[[WORD_LEFT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "word_left" });
+  },
+  "[[WORD_RIGHT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "word_right" });
+  },
+};
+
 /**
- * Stop recording, transcribe, post-process, and inject text
+ * Process voice commands in text and execute them
+ * Returns the text with commands removed, and executes the commands
+ */
+async function processVoiceCommands(text: string): Promise<string> {
+  let result = text;
+
+  for (const [command, action] of Object.entries(VOICE_COMMANDS)) {
+    if (result.includes(command)) {
+      // Execute the command
+      try {
+        await action();
+      } catch (error) {
+        console.error(`Failed to execute voice command ${command}:`, error);
+      }
+      // Remove the command from text
+      result = result.replace(command, "").trim();
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Stop recording, transcribe, post-process, and inject text or copy to clipboard
  */
 export async function stopTranscribeAndInject(
-  enablePostProcessing: boolean = true
+  enablePostProcessing: boolean = true,
+  clipboardMode: boolean = false
 ): Promise<string | null> {
   try {
     let text = await recordAndTranscribe();
     if (enablePostProcessing && text) {
       text = await postProcessText(text);
+      // Process voice commands (execute actions and remove from text)
+      text = await processVoiceCommands(text);
     }
-    if (text) {
-      await injectText(text);
+    // Only inject/copy if there's text left after processing commands
+    if (text && text.trim()) {
+      if (clipboardMode) {
+        await writeText(text);
+      } else {
+        await injectText(text);
+      }
     }
     return text;
   } catch (error) {

@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 mod audio;
 mod database;
 mod downloader;
@@ -611,6 +613,21 @@ fn inject_text(text: String) -> CommandResult<()> {
     }
     
     text_inject::inject_text_once(&sanitized).map_err(CommandError::TextInjection)
+}
+
+#[tauri::command]
+fn execute_keyboard_shortcut(shortcut: String) -> CommandResult<()> {
+    // Validate shortcut against allowed values
+    let allowed_shortcuts = [
+        "undo", "redo", "copy", "cut", "paste", "select_all", "backspace_word",
+        "backspace", "delete_word", "delete_line", "enter", "tab", "escape",
+        "left", "right", "up", "down", "home", "end", "word_left", "word_right"
+    ];
+    if !allowed_shortcuts.contains(&shortcut.as_str()) {
+        return Err(CommandError::TextInjection(format!("Invalid shortcut: {}", shortcut)));
+    }
+    
+    text_inject::execute_shortcut(&shortcut).map_err(CommandError::TextInjection)
 }
 
 // ==================== Transcription History Commands ====================
@@ -1228,12 +1245,23 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Handle window close to minimize to tray instead
+            // Handle window close - minimize to tray or actually close based on setting
             if let WindowEvent::CloseRequested { api, .. } = event {
-                debug!("Window close requested, hiding to tray");
-                // Hide window instead of closing
-                let _ = window.hide();
-                api.prevent_close();
+                // Get the minimize_to_tray setting from database
+                let should_minimize = window.app_handle()
+                    .try_state::<DbState>()
+                    .and_then(|db| db.0.get_settings().ok())
+                    .map(|settings| settings.minimize_to_tray)
+                    .unwrap_or(true); // Default to minimize if can't read setting
+                
+                if should_minimize {
+                    debug!("Window close requested, hiding to tray");
+                    let _ = window.hide();
+                    api.prevent_close();
+                } else {
+                    debug!("Window close requested, exiting app");
+                    // Allow the close to proceed - app will exit
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -1269,6 +1297,7 @@ pub fn run() {
             get_model_path,
             // Text injection
             inject_text,
+            execute_keyboard_shortcut,
             // Post-processing
             post_process_text,
             // Transcription history

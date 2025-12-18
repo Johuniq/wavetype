@@ -16,6 +16,7 @@ pub struct AppSettings {
     pub auto_start_on_boot: bool,
     pub minimize_to_tray: bool,
     pub post_processing_enabled: bool,
+    pub clipboard_mode: bool,
 }
 
 impl Default for AppSettings {
@@ -31,6 +32,7 @@ impl Default for AppSettings {
             auto_start_on_boot: false,
             minimize_to_tray: true,
             post_processing_enabled: true,
+            clipboard_mode: false,
         }
     }
 }
@@ -131,6 +133,7 @@ impl Database {
                 auto_start_on_boot INTEGER NOT NULL DEFAULT 0,
                 minimize_to_tray INTEGER NOT NULL DEFAULT 1,
                 post_processing_enabled INTEGER NOT NULL DEFAULT 1,
+                clipboard_mode INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
             [],
@@ -139,6 +142,12 @@ impl Database {
         // Add post_processing_enabled column if it doesn't exist (migration for existing DBs)
         let _ = conn.execute(
             "ALTER TABLE settings ADD COLUMN post_processing_enabled INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+
+        // Add clipboard_mode column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN clipboard_mode INTEGER NOT NULL DEFAULT 0",
             [],
         );
 
@@ -271,7 +280,7 @@ impl Database {
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
-                    post_processing_enabled
+                    post_processing_enabled, clipboard_mode
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -286,6 +295,7 @@ impl Database {
                     auto_start_on_boot: row.get::<_, i32>(7)? == 1,
                     minimize_to_tray: row.get::<_, i32>(8)? == 1,
                     post_processing_enabled: row.get::<_, i32>(9)? == 1,
+                    clipboard_mode: row.get::<_, i32>(10)? == 1,
                 })
             },
         )
@@ -305,6 +315,7 @@ impl Database {
                 auto_start_on_boot = ?8,
                 minimize_to_tray = ?9,
                 post_processing_enabled = ?10,
+                clipboard_mode = ?11,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -318,6 +329,7 @@ impl Database {
                 settings.auto_start_on_boot as i32,
                 settings.minimize_to_tray as i32,
                 settings.post_processing_enabled as i32,
+                settings.clipboard_mode as i32,
             ],
         )?;
         Ok(())

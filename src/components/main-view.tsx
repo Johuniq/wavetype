@@ -69,6 +69,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   const recordingStatusRef = useRef(recordingStatus);
   const isModelLoadedRef = useRef(isModelLoaded);
   const hotkeyModeRef = useRef(settings.hotkeyMode);
+  const settingsRef = useRef(settings);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -82,6 +83,10 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   useEffect(() => {
     hotkeyModeRef.current = settings.hotkeyMode;
   }, [settings.hotkeyMode]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const currentHotkey =
     settings.hotkeyMode === "push-to-talk"
@@ -132,7 +137,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       setErrorMessage(null);
 
       // Play audio feedback if enabled
-      if (settings.playAudioFeedback) {
+      if (settingsRef.current.playAudioFeedback) {
         playFeedbackSound("start");
       }
 
@@ -143,7 +148,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       recordingStatusRef.current = "error";
       setRecordingStatus("error");
     }
-  }, [setErrorMessage, setRecordingStatus, settings.playAudioFeedback]);
+  }, [setErrorMessage, setRecordingStatus]);
 
   // Handle stopping recording
   const handleStopRecording = useCallback(async () => {
@@ -156,15 +161,19 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     recordingStatusRef.current = "processing";
     setRecordingStatus("processing");
 
+    // Get current settings from ref to avoid stale closures
+    const currentSettings = settingsRef.current;
+
     // Play audio feedback if enabled
-    if (settings.playAudioFeedback) {
+    if (currentSettings.playAudioFeedback) {
       playFeedbackSound("stop");
     }
 
     try {
       const startTime = Date.now();
       const text = await stopTranscribeAndInject(
-        settings.postProcessingEnabled
+        currentSettings.postProcessingEnabled,
+        currentSettings.clipboardMode
       );
       const durationMs = Date.now() - startTime;
       if (text) {
@@ -174,11 +183,14 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
           const insertedId = await addTranscription(
             text,
             selectedModel?.id || "base",
-            settings.language,
+            currentSettings.language,
             durationMs
           );
           console.log("Saved transcription id:", insertedId);
-          toastSuccess("Saved transcription", `ID: ${insertedId}`);
+          const actionText = currentSettings.clipboardMode
+            ? "Copied to clipboard"
+            : "Saved transcription";
+          toastSuccess(actionText, `ID: ${insertedId}`);
         } catch (historyError: any) {
           console.error("Failed to save to history:", historyError);
           const msg =
@@ -202,10 +214,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     setRecordingStatus,
     setLastTranscription,
     setErrorMessage,
-    settings.playAudioFeedback,
-    settings.postProcessingEnabled,
     selectedModel?.id,
-    settings.language,
     toastSuccess,
     toastError,
   ]);

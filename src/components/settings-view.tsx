@@ -517,6 +517,23 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 }
               />
             </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Clipboard Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Copy text to clipboard instead of typing it
+                </p>
+              </div>
+              <Switch
+                checked={settings.clipboardMode}
+                onCheckedChange={(checked) =>
+                  updateSettings({ clipboardMode: checked })
+                }
+              />
+            </div>
           </CardContent>
         </Card>
 

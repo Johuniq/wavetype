@@ -27,11 +27,6 @@
         "dragDropEnabled": true
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false
-    },
     "security": {
       "csp": "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://github.com https://*.github.com https://api.github.com",
       "dangerousDisableAssetCspModification": false,
