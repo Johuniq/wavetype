@@ -1,8 +1,7 @@
 import { MainView } from "@/components/main-view";
 import { SetupWizard } from "@/components/setup";
 import { TrialExpiredView } from "@/components/trial-expired-view";
-import { ToastContainer } from "@/components/ui/toast-container";
-import { ToastProvider } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/sonner";
 import { canUseApp } from "@/lib/license-api";
 import { useAppStore, useIsInitialized } from "@/store";
 import { Loader2 } from "lucide-react";
@@ -114,12 +113,12 @@ function AppContent() {
 
 function App() {
   return (
-    <ToastProvider>
+    <>
       <main className="h-screen w-screen bg-background text-foreground overflow-hidden">
         <AppContent />
-        <ToastContainer />
       </main>
-    </ToastProvider>
+      <Toaster position="top-right" richColors closeButton />
+    </>
   );
 }
 

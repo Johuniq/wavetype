@@ -1,15 +1,12 @@
 /**
- * Toast notification context and hook
+ * Toast notification hook using Sonner (shadcn/ui)
  * Production-grade notification system for WaveType
  */
 
-import * as React from "react";
+import { toast as sonnerToast } from "sonner";
 
-export interface Toast {
-  id: string;
-  title: string;
+export interface ToastOptions {
   description?: string;
-  variant?: "default" | "success" | "error" | "warning";
   duration?: number;
   action?: {
     label: string;
@@ -17,97 +14,80 @@ export interface Toast {
   };
 }
 
-interface ToastContextValue {
-  toasts: Toast[];
-  addToast: (toast: Omit<Toast, "id">) => string;
-  removeToast: (id: string) => void;
-  clearToasts: () => void;
-}
-
-const ToastContext = React.createContext<ToastContextValue | undefined>(
-  undefined
-);
-
-let toastId = 0;
-
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = React.useState<Toast[]>([]);
-
-  const addToast = React.useCallback((toast: Omit<Toast, "id">) => {
-    const id = `toast-${++toastId}`;
-    const newToast: Toast = {
-      ...toast,
-      id,
-      duration: toast.duration ?? 5000,
-    };
-
-    setToasts((prev) => [...prev, newToast]);
-
-    // Auto-remove after duration
-    if (newToast.duration && newToast.duration > 0) {
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, newToast.duration);
-    }
-
-    return id;
-  }, []);
-
-  const removeToast = React.useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const clearToasts = React.useCallback(() => {
-    setToasts([]);
-  }, []);
-
-  return React.createElement(
-    ToastContext.Provider,
-    { value: { toasts, addToast, removeToast, clearToasts } },
-    children
-  );
-}
-
 export function useToast() {
-  const context = React.useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
-  }
+  const toast = (title: string, options?: ToastOptions) => {
+    return sonnerToast(title, {
+      description: options?.description,
+      duration: options?.duration ?? 5000,
+      action: options?.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+    });
+  };
 
-  const toast = React.useCallback(
-    (props: Omit<Toast, "id">) => context.addToast(props),
-    [context]
-  );
+  const success = (title: string, description?: string) => {
+    return sonnerToast.success(title, {
+      description,
+      duration: 5000,
+    });
+  };
 
-  const success = React.useCallback(
-    (title: string, description?: string) =>
-      context.addToast({ title, description, variant: "success" }),
-    [context]
-  );
+  const error = (title: string, description?: string) => {
+    return sonnerToast.error(title, {
+      description,
+      duration: 7000,
+    });
+  };
 
-  const error = React.useCallback(
-    (title: string, description?: string) =>
-      context.addToast({
-        title,
-        description,
-        variant: "error",
-        duration: 7000,
-      }),
-    [context]
-  );
+  const warning = (title: string, description?: string) => {
+    return sonnerToast.warning(title, {
+      description,
+      duration: 6000,
+    });
+  };
 
-  const warning = React.useCallback(
-    (title: string, description?: string) =>
-      context.addToast({ title, description, variant: "warning" }),
-    [context]
-  );
+  const info = (title: string, description?: string) => {
+    return sonnerToast.info(title, {
+      description,
+      duration: 5000,
+    });
+  };
+
+  const loading = (title: string, description?: string) => {
+    return sonnerToast.loading(title, {
+      description,
+    });
+  };
+
+  const dismiss = (toastId?: string | number) => {
+    sonnerToast.dismiss(toastId);
+  };
+
+  const promise = <T>(
+    promiseArg: Promise<T>,
+    options: {
+      loading: string;
+      success: string | ((data: T) => string);
+      error: string | ((err: unknown) => string);
+    }
+  ) => {
+    return sonnerToast.promise(promiseArg, options);
+  };
 
   return {
     toast,
     success,
     error,
     warning,
-    dismiss: context.removeToast,
-    toasts: context.toasts,
+    info,
+    loading,
+    dismiss,
+    promise,
   };
 }
+
+// Re-export for direct usage
+export { sonnerToast as toast };

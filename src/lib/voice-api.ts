@@ -38,6 +38,18 @@ export async function isRecording(): Promise<boolean> {
 }
 
 // ============================================
+// Recording Overlay API
+// ============================================
+
+export async function showRecordingOverlay(): Promise<void> {
+  await invoke("show_recording_overlay");
+}
+
+export async function hideRecordingOverlay(): Promise<void> {
+  await invoke("hide_recording_overlay");
+}
+
+// ============================================
 // Transcription API
 // ============================================
 

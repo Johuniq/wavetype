@@ -1,19 +1,17 @@
-import { HistoryView } from "@/components/history-view";
-import { LicenseView } from "@/components/license-view";
 import { Logo } from "@/components/logo";
-import { SettingsView } from "@/components/settings-view";
-import { TranscribeView } from "@/components/transcribe-view";
 import { useToast } from "@/hooks/use-toast";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
   addTranscription,
+  hideRecordingOverlay,
   loadModel,
   onHotkeyPressed,
   onHotkeyReleased,
   onTrayStartRecording,
   onTrayStopRecording,
   registerHotkey,
+  showRecordingOverlay,
   startRecording,
   stopTranscribeAndInject,
   unregisterHotkeys,
@@ -30,7 +28,33 @@ import {
   Mic,
   Settings,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+// Lazy load heavy views to reduce initial bundle and memory
+const HistoryView = lazy(() =>
+  import("@/components/history-view").then((m) => ({ default: m.HistoryView }))
+);
+const LicenseView = lazy(() =>
+  import("@/components/license-view").then((m) => ({ default: m.LicenseView }))
+);
+const SettingsView = lazy(() =>
+  import("@/components/settings-view").then((m) => ({
+    default: m.SettingsView,
+  }))
+);
+const TranscribeView = lazy(() =>
+  import("@/components/transcribe-view").then((m) => ({
+    default: m.TranscribeView,
+  }))
+);
 
 // Global flags to prevent duplicate listeners and calls
 let hotkeyListenersSetup = false;
@@ -138,12 +162,19 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         playFeedbackSound("start");
       }
 
+      // Show recording overlay if enabled
+      if (settingsRef.current.showRecordingOverlay !== false) {
+        showRecordingOverlay().catch(console.error);
+      }
+
       await startRecording();
     } catch (error) {
       console.error("Failed to start recording:", error);
       setErrorMessage("Failed to start recording");
       recordingStatusRef.current = "error";
       setRecordingStatus("error");
+      // Hide overlay on error
+      hideRecordingOverlay().catch(console.error);
     }
   }, [setErrorMessage, setRecordingStatus]);
 
@@ -157,6 +188,9 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     // Set status IMMEDIATELY to prevent duplicate calls
     recordingStatusRef.current = "processing";
     setRecordingStatus("processing");
+
+    // Hide recording overlay immediately when stopping
+    hideRecordingOverlay().catch(console.error);
 
     // Get current settings from ref to avoid stale closures
     const currentSettings = settingsRef.current;
@@ -326,7 +360,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     };
   }, [handleStartRecording, handleStopRecording]);
 
-  const toggleRecording = async () => {
+  const toggleRecording = useCallback(async () => {
     if (!isModelLoaded) {
       setErrorMessage("Model not loaded yet");
       return;
@@ -339,58 +373,100 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       // Stop recording and transcribe
       await handleStopRecording();
     }
-  };
+  }, [
+    isModelLoaded,
+    recordingStatus,
+    setErrorMessage,
+    handleStartRecording,
+    handleStopRecording,
+  ]);
 
-  const statusConfig: Record<
-    RecordingStatus,
-    {
-      bgClass: string;
-      iconClass: string;
-      label: string;
-    }
-  > = {
-    idle: {
-      bgClass: "bg-muted hover:bg-muted/80",
-      iconClass: "text-muted-foreground",
-      label: "Ready",
-    },
-    recording: {
-      bgClass: "bg-destructive",
-      iconClass: "text-destructive-foreground",
-      label: "Recording...",
-    },
-    processing: {
-      bgClass: "bg-primary",
-      iconClass: "text-primary-foreground",
-      label: "Processing...",
-    },
-    error: {
-      bgClass: "bg-destructive",
-      iconClass: "text-destructive-foreground",
-      label: "Error",
-    },
-  };
+  // Memoize status config to prevent recreation on every render
+  const statusConfig = useMemo<
+    Record<
+      RecordingStatus,
+      {
+        bgClass: string;
+        iconClass: string;
+        label: string;
+      }
+    >
+  >(
+    () => ({
+      idle: {
+        bgClass: "bg-muted hover:bg-muted/80",
+        iconClass: "text-muted-foreground",
+        label: "Ready",
+      },
+      recording: {
+        bgClass: "bg-destructive",
+        iconClass: "text-destructive-foreground",
+        label: "Recording...",
+      },
+      processing: {
+        bgClass: "bg-primary",
+        iconClass: "text-primary-foreground",
+        label: "Processing...",
+      },
+      error: {
+        bgClass: "bg-destructive",
+        iconClass: "text-destructive-foreground",
+        label: "Error",
+      },
+    }),
+    []
+  );
 
   const config = statusConfig[recordingStatus];
 
+  // Loading fallback for lazy-loaded views
+  const ViewLoadingFallback = useMemo(
+    () => (
+      <div className="relative flex flex-col h-full items-center justify-center overflow-hidden">
+        <div className="glass-mesh-bg" />
+        <div className="glass-card p-8 flex flex-col items-center">
+          <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
+          <p className="mt-4 text-sm text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    ),
+    []
+  );
+
   // Show settings view
   if (showSettings) {
-    return <SettingsView onClose={() => setShowSettings(false)} />;
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <SettingsView onClose={() => setShowSettings(false)} />
+      </Suspense>
+    );
   }
 
   // Show history view
   if (showHistory) {
-    return <HistoryView onClose={() => setShowHistory(false)} />;
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <HistoryView onClose={() => setShowHistory(false)} />
+      </Suspense>
+    );
   }
 
   // Show transcribe view
   if (showTranscribe) {
-    return <TranscribeView onClose={() => setShowTranscribe(false)} />;
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <TranscribeView onClose={() => setShowTranscribe(false)} />
+      </Suspense>
+    );
   }
 
   // Show license view
   if (showLicense) {
-    return <LicenseView onClose={() => setShowLicense(false)} />;
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <LicenseView onClose={() => setShowLicense(false)} />
+      </Suspense>
+    );
   }
 
   // Show loading state while model is loading

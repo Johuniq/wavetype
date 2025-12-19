@@ -22,6 +22,7 @@ import {
   validateLicense,
   type LicenseData,
 } from "@/lib/license-api";
+import { openUrl } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowLeft,
@@ -131,19 +132,16 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
 
     try {
       await deactivateLicense();
-      setLicense({
-        license_key: null,
-        activation_id: null,
-        status: "inactive",
-        customer_email: null,
-        customer_name: null,
-        expires_at: null,
-        is_activated: false,
-        last_validated_at: null,
-        trial_started_at: null,
-        trial_days_remaining: null,
-      });
-      setSuccess("License deactivated successfully");
+      // Reload license from database to get the correct status
+      // Status will be "trial_expired" if user had a trial, or "inactive" if not
+      const updatedLicense = await getLicense();
+      setLicense(updatedLicense);
+
+      const hadTrial = updatedLicense.trial_started_at !== null;
+      const message = hadTrial
+        ? "License deactivated. Your trial has already been used."
+        : "License deactivated. You can reactivate on this or another device.";
+      setSuccess(message);
       onLicenseChange?.(false);
     } catch (err) {
       console.error("Failed to deactivate license:", err);
@@ -157,6 +155,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
 
   const isActive = license ? isLicenseActive(license.status) : false;
   const isTrial = license?.status === "trial";
+  const isTrialExpired = license?.status === "trial_expired";
   const trialDaysRemaining = license?.trial_days_remaining;
 
   return (
@@ -206,6 +205,11 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     <Clock className="h-3.5 w-3.5" />
                     Trial
                   </span>
+                ) : isTrialExpired ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
+                    <Clock className="h-3.5 w-3.5" />
+                    Trial Expired
+                  </span>
                 ) : isActive ? (
                   <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
                     <ShieldCheck className="h-3.5 w-3.5" />
@@ -236,6 +240,21 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     </p>
                   </div>
                 )}
+
+              {/* Trial expired info */}
+              {isTrialExpired && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-4">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                      Your trial has expired
+                    </span>
+                  </div>
+                  <p className="text-xs text-foreground/60 mt-1">
+                    Purchase a license to continue using WaveType
+                  </p>
+                </div>
+              )}
 
               {license?.license_key && (
                 <div className="space-y-3">
@@ -441,34 +460,42 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
               </div>
             )}
 
-            {/* Buy License */}
-            <div className="glass-card p-4 rounded-2xl overflow-hidden relative">
-              <div className="relative">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                    <Sparkles className="h-4 w-4 text-foreground/60" />
+            {/* Buy License - Only show when user doesn't have active license */}
+            {(!isActive || isTrial || isTrialExpired) && (
+              <div className="glass-card p-4 rounded-2xl overflow-hidden relative">
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
+                      <Sparkles className="h-4 w-4 text-foreground/60" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-sm text-foreground">
+                        {isTrial || isTrialExpired
+                          ? "Upgrade to Pro"
+                          : "Get WaveType Pro"}
+                      </h2>
+                      <p className="text-xs text-foreground/60">
+                        {isTrial
+                          ? "Continue using WaveType after your trial ends"
+                          : isTrialExpired
+                          ? "Your trial has ended - purchase to continue"
+                          : "Unlock all features with a Pro license"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-semibold text-sm text-foreground">
-                      Get WaveType Pro
-                    </h2>
-                    <p className="text-xs text-foreground/60">
-                      Unlock all features with a Pro license
-                    </p>
-                  </div>
-                </div>
 
-                <button
-                  className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-                  onClick={() =>
-                    window.open("https://polar.sh/johuniq/wavetype", "_blank")
-                  }
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Purchase License
-                </button>
+                  <button
+                    className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+                    onClick={() => openUrl("https://polar.sh/johuniq/wavetype")}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    {isTrial || isTrialExpired
+                      ? "Upgrade Now"
+                      : "Purchase License"}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

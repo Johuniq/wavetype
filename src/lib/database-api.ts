@@ -16,6 +16,7 @@ export interface DbAppSettings {
   language: string;
   selected_model_id: string;
   show_recording_indicator: boolean;
+  show_recording_overlay: boolean;
   play_audio_feedback: boolean;
   auto_start_on_boot: boolean;
   minimize_to_tray: boolean;
@@ -173,6 +174,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     language: db.language as "en" | "bn",
     selectedModelId: db.selected_model_id,
     showRecordingIndicator: db.show_recording_indicator,
+    showRecordingOverlay: db.show_recording_overlay ?? true,
     playAudioFeedback: db.play_audio_feedback,
     postProcessingEnabled: db.post_processing_enabled,
     clipboardMode: db.clipboard_mode,
@@ -189,6 +191,7 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     language: settings.language,
     selected_model_id: settings.selectedModelId,
     show_recording_indicator: settings.showRecordingIndicator,
+    show_recording_overlay: settings.showRecordingOverlay,
     play_audio_feedback: settings.playAudioFeedback,
     post_processing_enabled: settings.postProcessingEnabled,
     clipboard_mode: settings.clipboardMode,

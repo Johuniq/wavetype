@@ -12,6 +12,7 @@ pub struct AppSettings {
     pub language: String,
     pub selected_model_id: String,
     pub show_recording_indicator: bool,
+    pub show_recording_overlay: bool,
     pub play_audio_feedback: bool,
     pub auto_start_on_boot: bool,
     pub minimize_to_tray: bool,
@@ -28,6 +29,7 @@ impl Default for AppSettings {
             language: "en".to_string(),
             selected_model_id: "base".to_string(),
             show_recording_indicator: true,
+            show_recording_overlay: true,
             play_audio_feedback: true,
             auto_start_on_boot: false,
             minimize_to_tray: true,
@@ -129,6 +131,7 @@ impl Database {
                 language TEXT NOT NULL DEFAULT 'en',
                 selected_model_id TEXT NOT NULL DEFAULT 'base',
                 show_recording_indicator INTEGER NOT NULL DEFAULT 1,
+                show_recording_overlay INTEGER NOT NULL DEFAULT 1,
                 play_audio_feedback INTEGER NOT NULL DEFAULT 1,
                 auto_start_on_boot INTEGER NOT NULL DEFAULT 0,
                 minimize_to_tray INTEGER NOT NULL DEFAULT 1,
@@ -148,6 +151,12 @@ impl Database {
         // Add clipboard_mode column if it doesn't exist (migration for existing DBs)
         let _ = conn.execute(
             "ALTER TABLE settings ADD COLUMN clipboard_mode INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
+        // Add show_recording_overlay column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN show_recording_overlay INTEGER NOT NULL DEFAULT 1",
             [],
         );
 
@@ -279,7 +288,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
-                    show_recording_indicator, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
+                    show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
                     post_processing_enabled, clipboard_mode
              FROM settings WHERE id = 1",
             [],
@@ -291,11 +300,12 @@ impl Database {
                     language: row.get(3)?,
                     selected_model_id: row.get(4)?,
                     show_recording_indicator: row.get::<_, i32>(5)? == 1,
-                    play_audio_feedback: row.get::<_, i32>(6)? == 1,
-                    auto_start_on_boot: row.get::<_, i32>(7)? == 1,
-                    minimize_to_tray: row.get::<_, i32>(8)? == 1,
-                    post_processing_enabled: row.get::<_, i32>(9)? == 1,
-                    clipboard_mode: row.get::<_, i32>(10)? == 1,
+                    show_recording_overlay: row.get::<_, i32>(6).unwrap_or(1) == 1,
+                    play_audio_feedback: row.get::<_, i32>(7)? == 1,
+                    auto_start_on_boot: row.get::<_, i32>(8)? == 1,
+                    minimize_to_tray: row.get::<_, i32>(9)? == 1,
+                    post_processing_enabled: row.get::<_, i32>(10)? == 1,
+                    clipboard_mode: row.get::<_, i32>(11)? == 1,
                 })
             },
         )
@@ -311,11 +321,12 @@ impl Database {
                 language = ?4,
                 selected_model_id = ?5,
                 show_recording_indicator = ?6,
-                play_audio_feedback = ?7,
-                auto_start_on_boot = ?8,
-                minimize_to_tray = ?9,
-                post_processing_enabled = ?10,
-                clipboard_mode = ?11,
+                show_recording_overlay = ?7,
+                play_audio_feedback = ?8,
+                auto_start_on_boot = ?9,
+                minimize_to_tray = ?10,
+                post_processing_enabled = ?11,
+                clipboard_mode = ?12,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -325,6 +336,7 @@ impl Database {
                 settings.language,
                 settings.selected_model_id,
                 settings.show_recording_indicator as i32,
+                settings.show_recording_overlay as i32,
                 settings.play_audio_feedback as i32,
                 settings.auto_start_on_boot as i32,
                 settings.minimize_to_tray as i32,
@@ -344,6 +356,7 @@ impl Database {
             "language",
             "selected_model_id",
             "show_recording_indicator",
+            "show_recording_overlay",
             "play_audio_feedback",
             "auto_start_on_boot",
             "minimize_to_tray",
@@ -608,17 +621,22 @@ impl Database {
 
     pub fn clear_license(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        // IMPORTANT: Preserve trial_started_at to prevent trial abuse
+        // Users who have used their trial should not be able to restart it
         conn.execute(
             "UPDATE license SET 
                 license_key = NULL,
                 activation_id = NULL,
-                status = 'inactive',
+                status = CASE 
+                    WHEN trial_started_at IS NOT NULL THEN 'trial_expired'
+                    ELSE 'inactive'
+                END,
                 customer_email = NULL,
                 customer_name = NULL,
                 expires_at = NULL,
                 is_activated = 0,
                 last_validated_at = NULL,
-                trial_started_at = NULL,
+                -- trial_started_at is preserved intentionally
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             [],

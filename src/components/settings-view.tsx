@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UpdaterView } from "@/components/updater-view";
+import { useToast } from "@/hooks/use-toast";
 import {
   downloadFile,
   exportAppData,
@@ -24,7 +25,6 @@ import {
 import { useAppStore, useAvailableModels } from "@/store";
 import type { WhisperModel } from "@/types";
 import {
-  AlertCircle,
   ArrowLeft,
   Check,
   ChevronRight,
@@ -38,8 +38,21 @@ import {
   Sparkles,
   Trash2,
   Volume2,
+  Waves,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -55,14 +68,13 @@ export function SettingsView({ onClose }: SettingsViewProps) {
     markModelDownloaded,
   } = useAppStore();
   const availableModels = useAvailableModels();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
     null
   );
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [storageStats, setStorageStats] = useState<{
     historyCount: number;
@@ -88,17 +100,17 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
   const handleDownloadModel = async (model: WhisperModel) => {
     try {
-      setError(null);
       setDownloadingModelId(model.id);
       setDownloadProgress(0);
 
       await downloadModel(model.id);
       markModelDownloaded(model.id);
+      toastSuccess("Model downloaded", `${model.name} is ready to use`);
 
       setDownloadingModelId(null);
     } catch (err) {
       console.error("Download failed:", err);
-      setError(`Failed to download ${model.name} model`);
+      toastError("Download failed", `Failed to download ${model.name} model`);
       setDownloadingModelId(null);
     }
   };
@@ -107,7 +119,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
     if (!model.downloaded) return;
 
     try {
-      setError(null);
       setDeletingModelId(model.id);
 
       await deleteModel(model.id);
@@ -117,13 +128,14 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         setSelectedModel(null);
       }
 
+      toastSuccess("Model deleted", `${model.name} has been removed`);
       // Reload to get updated model state
       window.location.reload();
 
       setDeletingModelId(null);
     } catch (err) {
       console.error("Delete failed:", err);
-      setError(`Failed to delete ${model.name} model`);
+      toastError("Delete failed", `Failed to delete ${model.name} model`);
       setDeletingModelId(null);
     }
   };
@@ -137,19 +149,17 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const handleExport = async () => {
     try {
       setIsExporting(true);
-      setError(null);
       const data = await exportAppData();
       const filename = `WaveType-backup-${new Date()
         .toISOString()
         .slice(0, 10)}.json`;
       const saved = await downloadFile(data, filename);
       if (saved) {
-        setSuccessMessage("Data exported successfully");
-        setTimeout(() => setSuccessMessage(null), 3000);
+        toastSuccess("Export complete", "Data exported successfully");
       }
     } catch (err) {
       console.error("Export failed:", err);
-      setError("Failed to export data");
+      toastError("Export failed", "Failed to export data");
     } finally {
       setIsExporting(false);
     }
@@ -231,22 +241,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Error message */}
-        {error && (
-          <div className="glass-card p-3 border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Success message */}
-        {successMessage && (
-          <div className="glass-card p-3 border-green-500/30 bg-green-500/10 flex items-center gap-2 text-green-600 dark:text-green-400">
-            <Check className="h-4 w-4 flex-shrink-0" />
-            <p className="text-sm">{successMessage}</p>
-          </div>
-        )}
-
         {/* Hotkey Settings */}
         <div className="glass-card p-4 rounded-2xl">
           <div className="flex items-center gap-3 mb-4">
@@ -507,6 +501,29 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
+            {/* Fullscreen Recording Overlay */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <Waves className="h-4 w-4 text-foreground/60" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Recording Overlay
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Show fullscreen wave animation when recording
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={settings.showRecordingOverlay}
+                onCheckedChange={(checked) =>
+                  updateSettings({ showRecordingOverlay: checked })
+                }
+              />
+            </div>
+
             {/* Audio Feedback */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
@@ -533,8 +550,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {/* Start on Boot */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <ChevronRight className="h-4 w-4 text-green-500" />
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <ChevronRight className="h-4 w-4 text-foreground/60" />
                 </div>
                 <div>
                   <Label className="text-sm font-medium cursor-pointer text-foreground">
@@ -553,7 +570,10 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                     updateSettings({ autoStartOnBoot: checked });
                   } catch (err) {
                     console.error("Failed to set autostart:", err);
-                    setError("Failed to change autostart setting");
+                    toastError(
+                      "Settings error",
+                      "Failed to change autostart setting"
+                    );
                   }
                 }}
               />
@@ -562,8 +582,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {/* Minimize to Tray */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <div className="w-3 h-2 border-2 border-purple-500 rounded-sm" />
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <div className="w-3 h-2 border-2 border-foreground/60 rounded-sm" />
                 </div>
                 <div>
                   <Label className="text-sm font-medium cursor-pointer text-foreground">
@@ -585,8 +605,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {/* Smart Text Processing */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                  <Sparkles className="h-4 w-4 text-cyan-500" />
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <Sparkles className="h-4 w-4 text-foreground/60" />
                 </div>
                 <div>
                   <Label className="text-sm font-medium cursor-pointer text-foreground">
@@ -608,9 +628,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             {/* Clipboard Mode */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
                   <svg
-                    className="h-4 w-4 text-indigo-500"
+                    className="h-4 w-4 text-foreground/60"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -708,17 +728,41 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               </p>
             </div>
           </div>
-          <button
-            className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-red-500 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all"
-            onClick={() => {
-              if (confirm("Reset all settings to defaults?")) {
-                resetSettings();
-              }
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset to Defaults
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-red-500 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all">
+                <RotateCcw className="h-4 w-4" />
+                Reset to Defaults
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="glass-card border-0">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset Settings?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will restore all settings to their default values. This
+                  action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="glass-button">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    try {
+                      resetSettings();
+                      toastSuccess?.("Settings reset to defaults");
+                    } catch (e) {
+                      toastError?.("Failed to reset settings");
+                    }
+                  }}
+                  className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"
+                >
+                  Reset
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* App Info Footer */}

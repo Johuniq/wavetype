@@ -17,6 +17,38 @@ export default defineConfig(async () => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+
+  // Production build optimizations
+  build: {
+    // Minify for production
+    minify: "esbuild",
+    // Chunk splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split vendor chunks
+          "react-vendor": ["react", "react-dom"],
+          "ui-vendor": [
+            "lucide-react",
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+          ],
+        },
+      },
+    },
+    // Reduce chunk size warnings
+    chunkSizeWarningLimit: 1000,
+    // Enable source maps only in dev
+    sourcemap: false,
+    // Target modern browsers for smaller bundle
+    target: "esnext",
+  },
+
+  // Optimize dependencies
+  optimizeDeps: {
+    include: ["react", "react-dom", "zustand"],
+  },
+
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available

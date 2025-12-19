@@ -4,6 +4,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
+// Pre-allocate buffer for ~30 seconds of 16kHz mono audio
+// This reduces dynamic allocations during recording
+const INITIAL_BUFFER_CAPACITY: usize = 16000 * 30;
+
 pub enum RecorderCommand {
     Stop,
 }
@@ -22,7 +26,7 @@ unsafe impl Sync for AudioRecorder {}
 impl AudioRecorder {
     pub fn new() -> Result<Self, String> {
         Ok(Self {
-            samples: Arc::new(Mutex::new(Vec::new())),
+            samples: Arc::new(Mutex::new(Vec::with_capacity(INITIAL_BUFFER_CAPACITY))),
             is_recording: Arc::new(AtomicBool::new(false)),
             command_sender: None,
             thread_handle: None,
@@ -34,8 +38,16 @@ impl AudioRecorder {
             return Err("Already recording".to_string());
         }
 
-        // Clear previous samples
-        self.samples.lock().unwrap().clear();
+        // Clear previous samples but keep capacity
+        {
+            let mut samples = self.samples.lock().unwrap();
+            samples.clear();
+            // Ensure we have enough capacity pre-allocated
+            let current_capacity = samples.capacity();
+            if current_capacity < INITIAL_BUFFER_CAPACITY {
+                samples.reserve(INITIAL_BUFFER_CAPACITY - current_capacity);
+            }
+        }
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<RecorderCommand>();
         let samples = self.samples.clone();
@@ -180,6 +192,8 @@ fn run_recording_thread(
     stream.play().map_err(|e| format!("Failed to start stream: {}", e))?;
 
     // Wait for stop command or check is_recording flag
+    // Using 100ms polling instead of 50ms to reduce CPU wake-ups
+    // This is still responsive enough for audio recording control
     loop {
         if let Ok(RecorderCommand::Stop) = cmd_rx.try_recv() {
             break;
@@ -187,7 +201,7 @@ fn run_recording_thread(
         if !is_recording.load(Ordering::SeqCst) {
             break;
         }
-        thread::sleep(std::time::Duration::from_millis(50));
+        thread::sleep(std::time::Duration::from_millis(100));
     }
 
     // Stream is dropped here, stopping the recording

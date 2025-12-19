@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "notes": "Initial release of WaveType - Voice to Text Desktop Application",
+  "pub_date": "2025-12-19T00:00:00Z",
+  "platforms": {
+    "darwin-x86_64": {
+      "signature": "",
+      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_x64.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "",
+      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_aarch64.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_1.0.0_x64-setup.exe"
+    }
+  }
+}

@@ -25,6 +25,21 @@
         "visible": true,
         "focus": true,
         "dragDropEnabled": true
+      },
+      {
+        "title": "",
+        "label": "recording-overlay",
+        "url": "/overlay.html",
+        "width": 1920,
+        "height": 1080,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "focus": false,
+        "fullscreen": true
       }
     ],
     "security": {
@@ -113,7 +128,7 @@
       "open": true
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU3NTY4QzA5QUIwNkMxM0EKUldRNndRYXJDWXhXVjZlUHpKUXZ0L3hZVXNsb0lYdUYySFMrdzdDczVPanVmbE9TdlVsbFNWQVgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGREUwNUUzM0ZDMkNEQjIKUldTeXpjSS80d1hlWDAzWEk2dDZDWkNndEg4aFUyb2JOU2taVTE1NDkwQ2JIV0kwVFlnQ29DdjYK",
       "endpoints": [
         "https://github.com/Johuniq/wavetype/releases/latest/download/latest.json"
       ],

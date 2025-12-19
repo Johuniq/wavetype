@@ -5,7 +5,7 @@ import {
   startTrial,
   type LicenseData,
 } from "@/lib/license-api";
-import { cn } from "@/lib/utils";
+import { cn, openUrl } from "@/lib/utils";
 import {
   AlertCircle,
   ArrowLeft,
@@ -257,16 +257,14 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
 
               {/* Purchase link */}
               <div className="pt-4 text-center">
-                <a
-                  href="https://polar.sh/wavetype"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => openUrl("https://polar.sh/johuniq/wavetype")}
                   className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
                 >
                   <Sparkles className="h-4 w-4" />
                   Purchase a license
                   <ExternalLink className="h-3 w-3" />
-                </a>
+                </button>
               </div>
             </div>
           ) : (

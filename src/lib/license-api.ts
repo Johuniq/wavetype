@@ -10,15 +10,22 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface LicenseData {
   license_key: string | null;
+  display_key: string | null;
   activation_id: string | null;
   status: LicenseStatus;
   customer_email: string | null;
   customer_name: string | null;
+  benefit_id: string | null;
   expires_at: string | null;
   is_activated: boolean;
   last_validated_at: string | null;
   trial_started_at: string | null;
   trial_days_remaining: number | null;
+  device_id: string;
+  device_label: string;
+  limit_activations: number | null;
+  usage: number;
+  validations: number;
 }
 
 export type LicenseStatus =
@@ -108,6 +115,20 @@ export async function canUseApp(): Promise<{
   daysRemaining?: number;
 }> {
   return await invoke("can_use_app");
+}
+
+/**
+ * Get device information for license display
+ */
+export interface DeviceInfo {
+  device_id: string;
+  device_label: string;
+  os: string;
+  arch: string;
+}
+
+export async function getDeviceInfo(): Promise<DeviceInfo> {
+  return await invoke<DeviceInfo>("get_device_info");
 }
 
 // ============================================

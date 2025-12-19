@@ -9,6 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { activateLicense } from "@/lib/license-api";
+import { openUrl } from "@/lib/utils";
 import {
   AlertCircle,
   Check,
@@ -116,7 +117,7 @@ export function TrialExpiredView({
                       <Button
                         className="mt-3 w-full"
                         onClick={() =>
-                          window.open("https://polar.sh/wavetype", "_blank")
+                          openUrl("https://polar.sh/johuniq/wavetype")
                         }
                       >
                         <ExternalLink className="mr-2 h-4 w-4" />

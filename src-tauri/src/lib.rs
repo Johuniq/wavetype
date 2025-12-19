@@ -13,7 +13,7 @@ use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorReporter, ErrorReport, ErrorSeverity, ErrorCategory, ErrorStats};
-use license::{LicenseClient, LicenseStatus, get_device_label, get_device_meta};
+use license::{LicenseManager, LicenseStatus, LicenseInfo, get_device_id, get_device_label, clear_cache};
 use post_process::PostProcessor;
 use log::{info, warn, debug, error};
 use std::sync::{Arc, Mutex};
@@ -30,9 +30,6 @@ use transcription::Transcriber;
 // Application version from Cargo.toml
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
-
-// Polar Organization ID - REPLACE WITH YOUR ACTUAL ORG ID
-const POLAR_ORG_ID: &str = "polar_oat_2wTM6MLdEFsJd8UWaSROeNGBT8tJ8UCmfVQXk4f2UXc";
 
 // Rate limiter for preventing abuse
 pub struct RateLimiter {
@@ -113,7 +110,7 @@ pub struct DbState(pub Arc<Database>);
 pub struct RecorderState(pub Arc<Mutex<Option<AudioRecorder>>>);
 pub struct TranscriberState(pub Arc<Mutex<Option<Transcriber>>>);
 pub struct DownloaderState(pub Arc<ModelDownloader>);
-pub struct LicenseClientState(pub Arc<LicenseClient>);
+pub struct LicenseManagerState(pub Arc<LicenseManager>);
 // Rate limiter: 100 requests per minute per action
 pub struct RecordingRateLimiter(pub Arc<RateLimiter>);
 pub struct TranscriptionRateLimiter(pub Arc<RateLimiter>);
@@ -282,6 +279,55 @@ fn is_recording(recorder: State<RecorderState>) -> bool {
     recorder_guard.as_ref().map(|r| r.is_recording()).unwrap_or(false)
 }
 
+// ==================== Recording Overlay Commands ====================
+
+#[tauri::command]
+async fn show_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
+    use tauri::Manager;
+    
+    if let Some(overlay_window) = app.get_webview_window("recording-overlay") {
+        // Show the overlay window
+        overlay_window.show().map_err(|e| {
+            error!("Failed to show overlay window: {}", e);
+            CommandError::Recording(format!("Failed to show overlay: {}", e))
+        })?;
+        
+        // Set it to fullscreen and always on top
+        overlay_window.set_fullscreen(true).map_err(|e| {
+            warn!("Failed to set fullscreen: {}", e);
+            CommandError::Recording(format!("Failed to set fullscreen: {}", e))
+        })?;
+        
+        overlay_window.set_always_on_top(true).map_err(|e| {
+            warn!("Failed to set always on top: {}", e);
+            CommandError::Recording(format!("Failed to set always on top: {}", e))
+        })?;
+        
+        debug!("Recording overlay shown");
+    } else {
+        warn!("Recording overlay window not found");
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn hide_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
+    use tauri::Manager;
+    
+    if let Some(overlay_window) = app.get_webview_window("recording-overlay") {
+        // Hide the overlay window
+        overlay_window.hide().map_err(|e| {
+            error!("Failed to hide overlay window: {}", e);
+            CommandError::Recording(format!("Failed to hide overlay: {}", e))
+        })?;
+        
+        debug!("Recording overlay hidden");
+    }
+    
+    Ok(())
+}
+
 // ==================== Transcription Commands ====================
 
 #[tauri::command]
@@ -300,6 +346,15 @@ fn load_model(
         )));
     }
     
+    // Drop existing model first to free memory before loading new one
+    {
+        let mut transcriber_guard = transcriber.0.lock().unwrap();
+        *transcriber_guard = None;
+        // Force memory release by dropping the guard
+        drop(transcriber_guard);
+    }
+    
+    // Load new model
     let new_transcriber = Transcriber::new(
         model_path.to_str().unwrap(),
         &language,
@@ -308,6 +363,16 @@ fn load_model(
     let mut transcriber_guard = transcriber.0.lock().unwrap();
     *transcriber_guard = Some(new_transcriber);
     
+    info!("Model loaded: {} (language: {})", model_id, language);
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn unload_model(transcriber: State<TranscriberState>) -> CommandResult<()> {
+    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    *transcriber_guard = None;
+    info!("Model unloaded");
     Ok(())
 }
 
@@ -652,9 +717,10 @@ fn add_transcription(
     
     // Validate model_id against allowed values
     const VALID_MODEL_IDS: &[&str] = &[
+        // Whisper models
         "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
         "tiny.en", "base.en", "small.en", "medium.en",
-        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3"
+        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Invalid model ID".to_string())));
@@ -704,19 +770,59 @@ fn delete_transcription(db: State<DbState>, id: i64) -> CommandResult<()> {
 
 // ==================== License Commands ====================
 
-// License response with computed trial days remaining
+// License response for frontend
 #[derive(Debug, serde::Serialize)]
 struct LicenseResponse {
     license_key: Option<String>,
+    display_key: Option<String>,
     activation_id: Option<String>,
     status: String,
     customer_email: Option<String>,
     customer_name: Option<String>,
+    benefit_id: Option<String>,
     expires_at: Option<String>,
     is_activated: bool,
     last_validated_at: Option<String>,
     trial_started_at: Option<String>,
     trial_days_remaining: Option<i64>,
+    device_id: String,
+    device_label: String,
+    limit_activations: Option<i32>,
+    usage: i32,
+    validations: i32,
+}
+
+impl From<LicenseInfo> for LicenseResponse {
+    fn from(info: LicenseInfo) -> Self {
+        Self {
+            license_key: Some(info.license_key),
+            display_key: Some(info.display_key),
+            activation_id: info.activation_id,
+            status: match info.status {
+                LicenseStatus::Granted => "active".to_string(),
+                LicenseStatus::Revoked => "revoked".to_string(),
+                LicenseStatus::Disabled => "disabled".to_string(),
+                LicenseStatus::Expired => "expired".to_string(),
+                LicenseStatus::Invalid => "invalid".to_string(),
+                LicenseStatus::ActivationLimitReached => "activation_limit".to_string(),
+                LicenseStatus::Offline => "active".to_string(), // Offline but valid
+                LicenseStatus::NotActivated => "not_activated".to_string(),
+            },
+            customer_email: info.customer_email,
+            customer_name: info.customer_name,
+            benefit_id: info.benefit_id,
+            expires_at: info.expires_at,
+            is_activated: info.status.allows_usage(),
+            last_validated_at: info.last_validated_at,
+            trial_started_at: None,
+            trial_days_remaining: None,
+            device_id: info.device_id,
+            device_label: info.device_label,
+            limit_activations: info.limit_activations,
+            usage: info.usage,
+            validations: info.validations,
+        }
+    }
 }
 
 impl From<LicenseData> for LicenseResponse {
@@ -735,21 +841,34 @@ impl From<LicenseData> for LicenseResponse {
         
         Self {
             license_key: data.license_key,
+            display_key: None,
             activation_id: data.activation_id,
             status: data.status,
             customer_email: data.customer_email,
             customer_name: data.customer_name,
+            benefit_id: None,
             expires_at: data.expires_at,
             is_activated: data.is_activated,
             last_validated_at: data.last_validated_at,
             trial_started_at: data.trial_started_at,
             trial_days_remaining,
+            device_id: get_device_id(),
+            device_label: get_device_label(),
+            limit_activations: None,
+            usage: 0,
+            validations: 0,
         }
     }
 }
 
 #[tauri::command]
-fn get_license(db: State<DbState>) -> CommandResult<LicenseResponse> {
+fn get_license(db: State<DbState>, license_manager: State<LicenseManagerState>) -> CommandResult<LicenseResponse> {
+    // First try to get from secure cache
+    if let Some(info) = license_manager.0.get_cached_info() {
+        return Ok(LicenseResponse::from(info));
+    }
+    
+    // Fall back to database
     let license = db.0.get_license().map_err(CommandError::Database)?;
     Ok(LicenseResponse::from(license))
 }
@@ -757,118 +876,88 @@ fn get_license(db: State<DbState>) -> CommandResult<LicenseResponse> {
 #[tauri::command]
 async fn activate_license(
     db: State<'_, DbState>,
-    license_client: State<'_, LicenseClientState>,
+    license_manager: State<'_, LicenseManagerState>,
     license_key: String,
 ) -> CommandResult<LicenseResponse> {
-    info!("Activating license key");
+    info!("Activating license key...");
     
-    // Get device info
-    let device_label = get_device_label();
-    let device_meta = get_device_meta();
-    
-    // Call Polar API to activate
-    let license_info = license_client.0
-        .activate(&license_key, &device_label, Some(device_meta))
+    // Activate using the new LicenseManager
+    let license_info = license_manager.0
+        .activate(&license_key)
         .await
         .map_err(CommandError::License)?;
     
-    // Convert to LicenseData and save
+    // Also save to database as backup
     let license_data = LicenseData {
         license_key: Some(license_key),
-        activation_id: license_info.activation_id,
-        status: match license_info.status {
-            LicenseStatus::Valid => "active".to_string(),
-            LicenseStatus::Expired => "expired".to_string(),
-            LicenseStatus::Revoked => "revoked".to_string(),
-            LicenseStatus::Disabled => "disabled".to_string(),
-            _ => "inactive".to_string(),
-        },
-        customer_email: license_info.customer_email,
-        customer_name: license_info.customer_name,
-        expires_at: license_info.expires_at,
-        is_activated: license_info.status == LicenseStatus::Valid,
+        activation_id: license_info.activation_id.clone(),
+        status: "active".to_string(),
+        customer_email: license_info.customer_email.clone(),
+        customer_name: license_info.customer_name.clone(),
+        expires_at: license_info.expires_at.clone(),
+        is_activated: true,
         last_validated_at: Some(chrono::Utc::now().to_rfc3339()),
         trial_started_at: None,
     };
     
-    // Save to database
     db.0.save_license(&license_data).map_err(CommandError::Database)?;
     
-    info!("License activated successfully");
-    Ok(LicenseResponse::from(license_data))
+    info!("License activated successfully!");
+    Ok(LicenseResponse::from(license_info))
 }
 
 #[tauri::command]
 async fn validate_license(
     db: State<'_, DbState>,
-    license_client: State<'_, LicenseClientState>,
+    license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<LicenseResponse> {
-    // Get stored license
-    let stored_license = db.0.get_license().map_err(CommandError::Database)?;
+    info!("Validating license...");
     
-    let license_key = stored_license.license_key
-        .ok_or_else(|| CommandError::License("No license key stored".to_string()))?;
-    
-    info!("Validating license key");
-    
-    // Call Polar API to validate
-    let license_info = license_client.0
-        .validate(&license_key, stored_license.activation_id.as_deref())
+    // Validate using the new LicenseManager
+    let license_info = license_manager.0
+        .validate()
         .await
         .map_err(CommandError::License)?;
     
-    // Update license data
+    // Update database
     let license_data = LicenseData {
-        license_key: Some(license_key),
-        activation_id: license_info.activation_id.or(stored_license.activation_id),
+        license_key: Some(license_info.license_key.clone()),
+        activation_id: license_info.activation_id.clone(),
         status: match license_info.status {
-            LicenseStatus::Valid => "active".to_string(),
+            LicenseStatus::Granted | LicenseStatus::Offline => "active".to_string(),
             LicenseStatus::Expired => "expired".to_string(),
             LicenseStatus::Revoked => "revoked".to_string(),
             LicenseStatus::Disabled => "disabled".to_string(),
-            LicenseStatus::Invalid => "invalid".to_string(),
-            LicenseStatus::NotActivated => "not_activated".to_string(),
-            LicenseStatus::ActivationLimitReached => "activation_limit".to_string(),
             _ => "inactive".to_string(),
         },
-        customer_email: license_info.customer_email.or(stored_license.customer_email),
-        customer_name: license_info.customer_name.or(stored_license.customer_name),
-        expires_at: license_info.expires_at.or(stored_license.expires_at),
-        is_activated: license_info.status == LicenseStatus::Valid,
-        last_validated_at: Some(chrono::Utc::now().to_rfc3339()),
-        trial_started_at: stored_license.trial_started_at,
+        customer_email: license_info.customer_email.clone(),
+        customer_name: license_info.customer_name.clone(),
+        expires_at: license_info.expires_at.clone(),
+        is_activated: license_info.status.allows_usage(),
+        last_validated_at: license_info.last_validated_at.clone(),
+        trial_started_at: None,
     };
     
-    // Save to database
-    db.0.save_license(&license_data).map_err(CommandError::Database)?;
+    let _ = db.0.save_license(&license_data);
     
-    info!("License validated: {:?}", license_data.status);
-    Ok(LicenseResponse::from(license_data))
+    info!("License validated: {:?}", license_info.status);
+    Ok(LicenseResponse::from(license_info))
 }
 
 #[tauri::command]
 async fn deactivate_license(
     db: State<'_, DbState>,
-    license_client: State<'_, LicenseClientState>,
+    license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<()> {
-    // Get stored license
-    let stored_license = db.0.get_license().map_err(CommandError::Database)?;
+    info!("Deactivating license...");
     
-    let license_key = stored_license.license_key
-        .ok_or_else(|| CommandError::License("No license key stored".to_string()))?;
-    
-    let activation_id = stored_license.activation_id
-        .ok_or_else(|| CommandError::License("No activation ID stored".to_string()))?;
-    
-    info!("Deactivating license key");
-    
-    // Call Polar API to deactivate
-    license_client.0
-        .deactivate(&license_key, &activation_id)
+    // Deactivate using the new LicenseManager
+    license_manager.0
+        .deactivate()
         .await
         .map_err(CommandError::License)?;
     
-    // Clear license from database
+    // Clear database
     db.0.clear_license().map_err(CommandError::Database)?;
     
     info!("License deactivated successfully");
@@ -877,17 +966,19 @@ async fn deactivate_license(
 
 #[tauri::command]
 fn clear_stored_license(db: State<DbState>) -> CommandResult<()> {
+    let _ = clear_cache();
     db.0.clear_license().map_err(Into::into)
 }
 
 #[tauri::command]
-fn is_license_valid(db: State<DbState>) -> bool {
+fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerState>) -> bool {
+    // First check with license manager (secure cache)
+    if license_manager.0.is_valid() {
+        return true;
+    }
+    
+    // Fall back to database for trial check
     if let Ok(license) = db.0.get_license() {
-        // Check if license is active OR if trial is active
-        if license.is_activated && license.status == "active" {
-            return true;
-        }
-        
         // Check trial status
         if license.status == "trial" {
             if let Some(trial_started) = &license.trial_started_at {
@@ -899,6 +990,7 @@ fn is_license_valid(db: State<DbState>) -> bool {
             }
         }
     }
+    
     false
 }
 
@@ -938,6 +1030,17 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
     
     info!("Trial started");
     Ok(LicenseResponse::from(license))
+}
+
+/// Get device information for license display
+#[tauri::command]
+fn get_device_info() -> serde_json::Value {
+    serde_json::json!({
+        "device_id": get_device_id(),
+        "device_label": get_device_label(),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
 }
 
 #[tauri::command]
@@ -1392,8 +1495,8 @@ pub fn run() {
             let models_dir = app_data_dir.join("models");
             app.manage(DownloaderState(Arc::new(ModelDownloader::new(models_dir))));
             
-            // Initialize license client
-            app.manage(LicenseClientState(Arc::new(LicenseClient::new(Some(POLAR_ORG_ID.to_string())))));
+            // Initialize license manager
+            app.manage(LicenseManagerState(Arc::new(LicenseManager::new())));
             
             // Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
@@ -1449,8 +1552,12 @@ pub fn run() {
             stop_recording,
             cancel_recording,
             is_recording,
+            // Recording overlay
+            show_recording_overlay,
+            hide_recording_overlay,
             // Transcription
             load_model,
+            unload_model,
             transcribe_audio,
             record_and_transcribe,
             transcribe_file,
@@ -1480,6 +1587,7 @@ pub fn run() {
             is_license_valid,
             start_trial,
             get_trial_status,
+            get_device_info,
             can_use_app,
             // Utility
             get_app_data_dir,

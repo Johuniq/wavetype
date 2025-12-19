@@ -29,6 +29,7 @@ export interface AppSettings {
   // UI preferences
   showRecordingIndicator: boolean;
   playAudioFeedback: boolean;
+  showRecordingOverlay: boolean; // Show fullscreen wave overlay when recording
 
   // Post-processing
   postProcessingEnabled: boolean;
@@ -106,6 +107,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   selectedModelId: "base",
   showRecordingIndicator: true,
   playAudioFeedback: true,
+  showRecordingOverlay: true,
   postProcessingEnabled: true,
   clipboardMode: false,
   autoStartOnBoot: false,
@@ -114,6 +116,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 // Model categories for UI grouping
 export type ModelCategory = "standard" | "english" | "distil" | "large";
+
+// Transcription engine types
+export type TranscriptionEngine = "whisper";
 
 // Available Whisper models
 export const WHISPER_MODELS: WhisperModel[] = [

@@ -59,7 +59,33 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("Failed to check for updates", { error: message });
-    return { status: "error", message };
+
+    // Check if this is a "no release found" error (expected for new installations)
+    const isNoReleaseError =
+      message.includes("fetch") ||
+      message.includes("JSON") ||
+      message.includes("remote") ||
+      message.includes("status code") ||
+      message.includes("404") ||
+      message.includes("Not Found");
+
+    if (isNoReleaseError) {
+      // Return "not-available" instead of error for missing release files
+      // This is expected when no update is published yet
+      logger.info("No update manifest found - treating as up-to-date");
+      return {
+        status: "not-available",
+        currentVersion: await getCurrentVersion(),
+      };
+    }
+
+    // Provide user-friendly error message for real errors
+    let friendlyMessage = message;
+    if (message.includes("network") || message.includes("connect")) {
+      friendlyMessage = "Network error. Please check your internet connection.";
+    }
+
+    return { status: "error", message: friendlyMessage };
   }
 }
 
