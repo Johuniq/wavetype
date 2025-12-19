@@ -25,7 +25,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
     {
       icon: Globe,
       title: "Multi-language",
-      description: "English & Bangla support",
+      description: "99+ language support",
     },
   ];
 
@@ -62,7 +62,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <div className="w-full max-sm space-y-3">
           <button
             onClick={onNext}
-            className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+            className="glass-button w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
           >
             Get Started
             <ArrowRight className="h-4 w-4" />

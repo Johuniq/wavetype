@@ -1,5 +1,5 @@
 //! Production-grade License Management for WaveType
-//! 
+//!
 //! Implements Polar.sh License Key API integration with:
 //! - Device activation with unique device fingerprinting
 //! - License validation with activation_id verification  
@@ -8,12 +8,12 @@
 //!
 //! API Reference: https://polar.sh/docs/api-reference/customer-portal/license-keys/
 
+use log::{debug, error, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::time::Duration;
-use log::{info, warn, error, debug};
 
 // =============================================================================
 // Configuration Constants
@@ -103,7 +103,7 @@ impl LicenseStatus {
     pub fn allows_usage(&self) -> bool {
         matches!(self, LicenseStatus::Granted | LicenseStatus::Offline)
     }
-    
+
     /// Parse from Polar API status string
     pub fn from_polar_status(status: &str) -> Self {
         match status.to_lowercase().as_str() {
@@ -268,6 +268,10 @@ pub struct CachedLicense {
     pub last_validated_at: String,
     /// License status at last validation
     pub status: String,
+    /// Usage count
+    pub usage: i32,
+    /// Validation count
+    pub validations: i32,
     /// Integrity hash to detect tampering
     pub integrity_hash: String,
     /// Cache version for migrations
@@ -284,21 +288,21 @@ const CACHE_VERSION: i32 = 2;
 /// Uses hardware identifiers to create a reproducible ID
 pub fn get_device_id() -> String {
     let mut hasher = Sha256::new();
-    
+
     // Hostname
     if let Ok(hostname) = hostname::get() {
         hasher.update(hostname.to_string_lossy().as_bytes());
     }
-    
+
     // OS and architecture
     hasher.update(std::env::consts::OS.as_bytes());
     hasher.update(std::env::consts::ARCH.as_bytes());
-    
+
     // Username for multi-user systems
     if let Ok(user) = std::env::var("USER").or_else(|_| std::env::var("USERNAME")) {
         hasher.update(user.as_bytes());
     }
-    
+
     // Platform-specific hardware identifiers
     #[cfg(target_os = "macos")]
     {
@@ -313,7 +317,7 @@ pub fn get_device_id() -> String {
             }
         }
     }
-    
+
     #[cfg(target_os = "windows")]
     {
         // Get Windows machine UUID
@@ -324,7 +328,7 @@ pub fn get_device_id() -> String {
             hasher.update(&output.stdout);
         }
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         // Get Linux machine-id
@@ -334,7 +338,7 @@ pub fn get_device_id() -> String {
             hasher.update(id.trim().as_bytes());
         }
     }
-    
+
     // Create readable device ID with prefix
     let hash = hasher.finalize();
     format!("WVT-{}", hex::encode(&hash[..12]).to_uppercase())
@@ -345,14 +349,14 @@ pub fn get_device_label() -> String {
     let hostname = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "Unknown".to_string());
-    
+
     let os = match std::env::consts::OS {
         "macos" => "macOS",
-        "windows" => "Windows", 
+        "windows" => "Windows",
         "linux" => "Linux",
         other => other,
     };
-    
+
     format!("{} ({})", hostname, os)
 }
 
@@ -417,28 +421,25 @@ fn derive_encryption_key() -> Vec<u8> {
 
 /// Store license cache securely
 pub fn store_cache(cache: &CachedLicense) -> Result<(), String> {
-    let cache_dir = get_cache_dir()
-        .ok_or("Failed to get cache directory")?;
-    
+    let cache_dir = get_cache_dir().ok_or("Failed to get cache directory")?;
+
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("Failed to create cache directory: {}", e))?;
-    
-    let cache_path = get_cache_path()
-        .ok_or("Failed to get cache path")?;
-    
+
+    let cache_path = get_cache_path().ok_or("Failed to get cache path")?;
+
     // Add integrity hash
     let mut cache_with_hash = cache.clone();
     cache_with_hash.integrity_hash = calculate_integrity_hash(cache);
     cache_with_hash.cache_version = CACHE_VERSION;
-    
+
     let json = serde_json::to_string(&cache_with_hash)
         .map_err(|e| format!("Failed to serialize cache: {}", e))?;
-    
+
     let encrypted = encrypt_data(json.as_bytes());
-    
-    std::fs::write(&cache_path, encrypted)
-        .map_err(|e| format!("Failed to write cache: {}", e))?;
-    
+
+    std::fs::write(&cache_path, encrypted).map_err(|e| format!("Failed to write cache: {}", e))?;
+
     debug!("License cache stored successfully");
     Ok(())
 }
@@ -446,31 +447,31 @@ pub fn store_cache(cache: &CachedLicense) -> Result<(), String> {
 /// Load license cache from disk
 pub fn load_cache() -> Option<CachedLicense> {
     let cache_path = get_cache_path()?;
-    
+
     let encrypted = std::fs::read(&cache_path).ok()?;
     let decrypted = decrypt_data(&encrypted);
     let json = String::from_utf8(decrypted).ok()?;
     let cache: CachedLicense = serde_json::from_str(&json).ok()?;
-    
+
     // Verify integrity
     let expected_hash = calculate_integrity_hash(&cache);
     if cache.integrity_hash != expected_hash {
         warn!("License cache integrity check failed - possible tampering");
         return None;
     }
-    
+
     // Verify device binding
     if cache.device_id != get_device_id() {
         warn!("License cache device mismatch");
         return None;
     }
-    
+
     // Check cache version
     if cache.cache_version != CACHE_VERSION {
         warn!("License cache version mismatch");
         return None;
     }
-    
+
     debug!("License cache loaded successfully");
     Some(cache)
 }
@@ -479,8 +480,7 @@ pub fn load_cache() -> Option<CachedLicense> {
 pub fn clear_cache() -> Result<(), String> {
     if let Some(path) = get_cache_path() {
         if path.exists() {
-            std::fs::remove_file(&path)
-                .map_err(|e| format!("Failed to delete cache: {}", e))?;
+            std::fs::remove_file(&path).map_err(|e| format!("Failed to delete cache: {}", e))?;
         }
     }
     info!("License cache cleared");
@@ -502,30 +502,33 @@ impl LicenseManager {
     pub fn new() -> Self {
         Self::with_org_id(POLAR_ORG_ID)
     }
-    
+
     /// Create license manager with custom org ID
     pub fn with_org_id(org_id: &str) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
             .expect("Failed to create HTTP client");
-        
+
         Self {
             client,
             org_id: org_id.to_string(),
         }
     }
-    
+
     /// Activate a license key on this device
-    /// 
+    ///
     /// This creates an activation instance in Polar and stores the activation_id
     /// locally for future validations.
     pub async fn activate(&self, license_key: &str) -> Result<LicenseInfo, String> {
         let device_id = get_device_id();
         let device_label = get_device_label();
-        
-        info!("Activating license on device: {} ({})", device_label, device_id);
-        
+
+        info!(
+            "Activating license on device: {} ({})",
+            device_label, device_id
+        );
+
         let request = ActivateRequest {
             key: license_key.to_string(),
             organization_id: self.org_id.clone(),
@@ -533,61 +536,118 @@ impl LicenseManager {
             conditions: None,
             meta: Some(get_device_meta()),
         };
-        
+
         let url = format!("{}/activate", POLAR_API_BASE);
         debug!("POST {}", url);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json")
             .json(&request)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
-        
+
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        
+
         debug!("Response status: {}", status);
         debug!("Response body: {}", body);
-        
+
         if status.is_success() {
             let data: ActivateResponse = serde_json::from_str(&body)
                 .map_err(|e| format!("Failed to parse response: {} - Body: {}", e, body))?;
-            
+
             info!("License activated successfully!");
             info!("  Activation ID: {}", data.id);
             info!("  Status: {}", data.license_key.status);
-            info!("  Activations: {}/{:?}", data.license_key.usage, data.license_key.limit_activations);
-            
+            info!(
+                "  Activations: {}/{:?}",
+                data.license_key.usage, data.license_key.limit_activations
+            );
+
             // Check expiration
             let license_status = self.check_license_status(&data.license_key);
-            
-            // Store in local cache
-            let cache = CachedLicense {
+
+            // Store in local cache (initial activation record)
+            let mut cache = CachedLicense {
                 license_key: license_key.to_string(),
                 activation_id: data.id.clone(),
                 device_id: device_id.clone(),
                 device_label: device_label.clone(),
                 customer_email: data.license_key.customer.as_ref().map(|c| c.email.clone()),
-                customer_name: data.license_key.customer.as_ref().and_then(|c| c.name.clone()),
+                customer_name: data
+                    .license_key
+                    .customer
+                    .as_ref()
+                    .and_then(|c| c.name.clone()),
                 benefit_id: data.license_key.benefit_id.clone(),
                 expires_at: data.license_key.expires_at.clone(),
                 last_validated_at: chrono::Utc::now().to_rfc3339(),
                 status: data.license_key.status.clone(),
+                usage: data.license_key.usage,
+                validations: data.license_key.validations,
                 integrity_hash: String::new(),
                 cache_version: CACHE_VERSION,
             };
-            
+
+            // Persist initial cache
             store_cache(&cache)?;
-            
+
+            // After activation we should also perform a validation request so that
+            // Polar's validation counters (and any server-side state) are updated
+            // immediately. We set increment_usage to Some(1) so that both
+            // activation and validation counts are incremented.
+            match self
+                .perform_validate(&cache.license_key, &cache.activation_id, Some(cache.benefit_id.clone()), Some(1))
+                .await
+            {
+                Ok(validate_resp) => {
+                    // Update cache from validation response
+                    cache.last_validated_at = chrono::Utc::now().to_rfc3339();
+                    cache.status = validate_resp.status.clone();
+                    cache.usage = validate_resp.usage;
+                    cache.validations = validate_resp.validations;
+                    let _ = store_cache(&cache);
+
+                    let license_status = self.check_license_status_from_validate(&validate_resp);
+
+                    return Ok(LicenseInfo {
+                        license_key: cache.license_key.clone(),
+                        display_key: validate_resp.display_key,
+                        status: license_status,
+                        activation_id: validate_resp.activation.as_ref().map(|a| a.id.clone()),
+                        customer_email: validate_resp.customer.as_ref().map(|c| c.email.clone()),
+                        customer_name: validate_resp.customer.as_ref().and_then(|c| c.name.clone()),
+                        benefit_id: Some(validate_resp.benefit_id),
+                        expires_at: validate_resp.expires_at,
+                        limit_activations: validate_resp.limit_activations,
+                        usage: validate_resp.usage,
+                        limit_usage: validate_resp.limit_usage,
+                        validations: validate_resp.validations,
+                        last_validated_at: validate_resp.last_validated_at,
+                        device_id,
+                        device_label,
+                    });
+                }
+                Err(e) => {
+                    warn!("Validation after activation failed: {}", e);
+                    // Fallthrough to return activation-derived info
+                }
+            }
+
             Ok(LicenseInfo {
                 license_key: license_key.to_string(),
                 display_key: data.license_key.display_key,
                 status: license_status,
                 activation_id: Some(data.id),
                 customer_email: data.license_key.customer.as_ref().map(|c| c.email.clone()),
-                customer_name: data.license_key.customer.as_ref().and_then(|c| c.name.clone()),
+                customer_name: data
+                    .license_key
+                    .customer
+                    .as_ref()
+                    .and_then(|c| c.name.clone()),
                 benefit_id: Some(data.license_key.benefit_id),
                 expires_at: data.license_key.expires_at,
                 limit_activations: data.license_key.limit_activations,
@@ -606,7 +666,10 @@ impl LicenseManager {
                 error_type: None,
             });
             error!("Activation limit reached: {:?}", err);
-            Err("Activation limit reached. Please deactivate from another device first.".to_string())
+            Err(
+                "Activation limit reached. Please deactivate from another device first."
+                    .to_string(),
+            )
         } else if status.as_u16() == 404 {
             error!("License key not found");
             Err("Invalid license key. Please check and try again.".to_string())
@@ -617,116 +680,110 @@ impl LicenseManager {
                 error_type: None,
             });
             error!("Validation error: {:?}", err);
-            Err(format!("Invalid request: {}", err.detail.unwrap_or(err.error.unwrap_or_default())))
+            Err(format!(
+                "Invalid request: {}",
+                err.detail.unwrap_or(err.error.unwrap_or_default())
+            ))
         } else {
             error!("Activation failed: {} - {}", status, body);
             Err(format!("Activation failed: HTTP {}", status))
         }
     }
-    
+
     /// Validate the current license
-    /// 
+    ///
     /// First tries online validation with Polar API, falls back to cached
     /// license within the offline grace period.
     pub async fn validate(&self) -> Result<LicenseInfo, String> {
         let device_id = get_device_id();
         let device_label = get_device_label();
-        
+
         // Load cached license
         let cache = load_cache();
-        
+
         if let Some(ref cached) = cache {
             info!("Validating license with Polar API...");
-            
-            let request = ValidateRequest {
-                key: cached.license_key.clone(),
-                organization_id: self.org_id.clone(),
-                activation_id: Some(cached.activation_id.clone()),
-                benefit_id: Some(cached.benefit_id.clone()),
-                increment_usage: None, // Don't increment usage on validation
-            };
-            
-            let url = format!("{}/validate", POLAR_API_BASE);
-            
-            match self.client
-                .post(&url)
-                .header("Content-Type", "application/json")
-                .json(&request)
-                .send()
+
+            match self
+                .perform_validate(
+                    &cached.license_key,
+                    &cached.activation_id,
+                    Some(cached.benefit_id.clone()),
+                    Some(1), // Increment usage on manual validation too
+                )
                 .await
             {
-                Ok(response) => {
-                    let status = response.status();
-                    let body = response.text().await.unwrap_or_default();
-                    
-                    debug!("Validate response: {} - {}", status, body);
-                    
-                    if status.is_success() {
-                        let data: ValidateResponse = serde_json::from_str(&body)
-                            .map_err(|e| format!("Failed to parse response: {}", e))?;
-                        
-                        let license_status = self.check_license_status_from_validate(&data);
-                        
-                        info!("License validated successfully!");
-                        info!("  Status: {} -> {:?}", data.status, license_status);
-                        info!("  Validations: {}", data.validations);
-                        info!("  Has activation: {}", data.activation.is_some());
-                        
-                        // Update cache
-                        let mut updated_cache = cached.clone();
-                        updated_cache.last_validated_at = chrono::Utc::now().to_rfc3339();
-                        updated_cache.status = data.status.clone();
-                        let _ = store_cache(&updated_cache);
-                        
-                        return Ok(LicenseInfo {
-                            license_key: cached.license_key.clone(),
-                            display_key: data.display_key,
-                            status: license_status,
-                            activation_id: data.activation.as_ref().map(|a| a.id.clone()),
-                            customer_email: data.customer.as_ref().map(|c| c.email.clone()),
-                            customer_name: data.customer.as_ref().and_then(|c| c.name.clone()),
-                            benefit_id: Some(data.benefit_id),
-                            expires_at: data.expires_at,
-                            limit_activations: data.limit_activations,
-                            usage: data.usage,
-                            limit_usage: data.limit_usage,
-                            validations: data.validations,
-                            last_validated_at: data.last_validated_at,
-                            device_id: device_id.clone(),
-                            device_label: device_label.clone(),
-                        });
-                    } else if status.as_u16() == 404 {
+                Ok(data) => {
+                    let license_status = self.check_license_status_from_validate(&data);
+
+                    info!("License validated successfully!");
+                    info!("  Status: {} -> {:?}", data.status, license_status);
+                    info!("  Validations: {}", data.validations);
+                    info!("  Has activation: {}", data.activation.is_some());
+
+                    // Update cache
+                    let mut updated_cache = cached.clone();
+                    updated_cache.last_validated_at = chrono::Utc::now().to_rfc3339();
+                    updated_cache.status = data.status.clone();
+                    updated_cache.usage = data.usage;
+                    updated_cache.validations = data.validations;
+                    let _ = store_cache(&updated_cache);
+
+                    return Ok(LicenseInfo {
+                        license_key: cached.license_key.clone(),
+                        display_key: data.display_key,
+                        status: license_status,
+                        activation_id: data.activation.as_ref().map(|a| a.id.clone()),
+                        customer_email: data.customer.as_ref().map(|c| c.email.clone()),
+                        customer_name: data.customer.as_ref().and_then(|c| c.name.clone()),
+                        benefit_id: Some(data.benefit_id),
+                        expires_at: data.expires_at,
+                        limit_activations: data.limit_activations,
+                        usage: data.usage,
+                        limit_usage: data.limit_usage,
+                        validations: data.validations,
+                        last_validated_at: data.last_validated_at,
+                        device_id: device_id.clone(),
+                        device_label: device_label.clone(),
+                    });
+                }
+                Err(e) => {
+                    if e.contains("HTTP 404") {
                         // License or activation not found - clear cache
                         warn!("License not found on server - clearing cache");
                         let _ = clear_cache();
                         return Err("License not found. Please activate again.".to_string());
-                    } else {
-                        warn!("Validation failed: {} - {}", status, body);
-                        // Fall through to offline validation
                     }
-                }
-                Err(e) => {
-                    warn!("Network error during validation: {}", e);
+                    warn!("Validation failed: {}", e);
                     // Fall through to offline validation
                 }
             }
-            
+
             // Offline validation - check grace period
             return self.validate_offline(cached, &device_id, &device_label);
         }
-        
+
         Err("No license activated. Please enter your license key.".to_string())
     }
-    
+
     /// Validate license offline using cache
-    fn validate_offline(&self, cache: &CachedLicense, device_id: &str, device_label: &str) -> Result<LicenseInfo, String> {
+    fn validate_offline(
+        &self,
+        cache: &CachedLicense,
+        device_id: &str,
+        device_label: &str,
+    ) -> Result<LicenseInfo, String> {
         // Check last validation time
         if let Ok(last_validated) = chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at) {
-            let hours_since = (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
-            
+            let hours_since =
+                (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
+
             if hours_since < OFFLINE_GRACE_HOURS && cache.status == "granted" {
-                info!("Using offline license (validated {} hours ago)", hours_since);
-                
+                info!(
+                    "Using offline license (validated {} hours ago)",
+                    hours_since
+                );
+
                 // Check expiration even offline
                 if let Some(ref expires_at) = cache.expires_at {
                     if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
@@ -735,7 +792,7 @@ impl LicenseManager {
                         }
                     }
                 }
-                
+
                 return Ok(LicenseInfo {
                     license_key: cache.license_key.clone(),
                     display_key: mask_key(&cache.license_key),
@@ -754,38 +811,41 @@ impl LicenseManager {
                     device_label: device_label.to_string(),
                 });
             }
-            
-            error!("Offline grace period expired ({} hours since last validation)", hours_since);
+
+            error!(
+                "Offline grace period expired ({} hours since last validation)",
+                hours_since
+            );
         }
-        
+
         Err("License validation failed and offline grace period expired. Please connect to the internet.".to_string())
     }
-    
+
     /// Deactivate license from this device
     pub async fn deactivate(&self) -> Result<(), String> {
-        let cache = load_cache()
-            .ok_or("No license to deactivate")?;
-        
+        let cache = load_cache().ok_or("No license to deactivate")?;
+
         info!("Deactivating license from device...");
-        
+
         let request = DeactivateRequest {
             key: cache.license_key.clone(),
             organization_id: self.org_id.clone(),
             activation_id: cache.activation_id.clone(),
         };
-        
+
         let url = format!("{}/deactivate", POLAR_API_BASE);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json")
             .json(&request)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
-        
+
         let status = response.status();
-        
+
         // 204 No Content = success
         if status.is_success() || status.as_u16() == 204 {
             info!("License deactivated successfully");
@@ -802,7 +862,7 @@ impl LicenseManager {
             Err(format!("Deactivation failed: HTTP {}", status))
         }
     }
-    
+
     /// Check if license is currently valid (quick local check)
     pub fn is_valid(&self) -> bool {
         if let Some(cache) = load_cache() {
@@ -810,7 +870,7 @@ impl LicenseManager {
             if cache.status != "granted" {
                 return false;
             }
-            
+
             // Check expiration
             if let Some(ref expires_at) = cache.expires_at {
                 if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
@@ -819,23 +879,26 @@ impl LicenseManager {
                     }
                 }
             }
-            
+
             // Check offline grace period
-            if let Ok(last_validated) = chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at) {
-                let hours_since = (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
+            if let Ok(last_validated) =
+                chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at)
+            {
+                let hours_since =
+                    (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
                 return hours_since < OFFLINE_GRACE_HOURS;
             }
         }
-        
+
         false
     }
-    
+
     /// Get cached license info without validation
     pub fn get_cached_info(&self) -> Option<LicenseInfo> {
         let cache = load_cache()?;
         let device_id = get_device_id();
         let device_label = get_device_label();
-        
+
         Some(LicenseInfo {
             license_key: cache.license_key.clone(),
             display_key: mask_key(&cache.license_key),
@@ -846,15 +909,15 @@ impl LicenseManager {
             benefit_id: Some(cache.benefit_id),
             expires_at: cache.expires_at,
             limit_activations: None,
-            usage: 0,
+            usage: cache.usage,
             limit_usage: None,
-            validations: 0,
+            validations: cache.validations,
             last_validated_at: Some(cache.last_validated_at),
             device_id,
             device_label,
         })
     }
-    
+
     /// Determine license status from license key data
     fn check_license_status(&self, key: &PolarLicenseKey) -> LicenseStatus {
         // Check Polar status
@@ -863,7 +926,7 @@ impl LicenseManager {
             "disabled" => return LicenseStatus::Disabled,
             _ => {}
         }
-        
+
         // Check expiration
         if let Some(ref expires_at) = key.expires_at {
             if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
@@ -872,10 +935,10 @@ impl LicenseManager {
                 }
             }
         }
-        
+
         LicenseStatus::Granted
     }
-    
+
     /// Determine license status from validate response
     fn check_license_status_from_validate(&self, data: &ValidateResponse) -> LicenseStatus {
         // Check Polar status
@@ -884,7 +947,7 @@ impl LicenseManager {
             "disabled" => return LicenseStatus::Disabled,
             _ => {}
         }
-        
+
         // Check expiration
         if let Some(ref expires_at) = data.expires_at {
             if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
@@ -893,8 +956,47 @@ impl LicenseManager {
                 }
             }
         }
-        
+
         LicenseStatus::Granted
+    }
+
+    /// Helper: perform a validate call for a given license key + activation id
+    async fn perform_validate(
+        &self,
+        license_key: &str,
+        activation_id: &str,
+        benefit_id: Option<String>,
+        increment_usage: Option<i32>,
+    ) -> Result<ValidateResponse, String> {
+        let request = ValidateRequest {
+            key: license_key.to_string(),
+            organization_id: self.org_id.clone(),
+            activation_id: Some(activation_id.to_string()),
+            benefit_id,
+            increment_usage,
+        };
+
+        let url = format!("{}/validate", POLAR_API_BASE);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| format!("Network error during validate: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+
+        if status.is_success() {
+            let data: ValidateResponse = serde_json::from_str(&body)
+                .map_err(|e| format!("Failed to parse validate response: {} - Body: {}", e, body))?;
+            Ok(data)
+        } else {
+            Err(format!("Validate failed: HTTP {} - {}", status, body))
+        }
     }
 }
 
@@ -913,7 +1015,7 @@ fn mask_key(key: &str) -> String {
     if key.len() <= 8 {
         return "****".to_string();
     }
-    
+
     let parts: Vec<&str> = key.split('-').collect();
     if parts.len() >= 2 {
         format!("****-{}", parts.last().unwrap_or(&"****"))
@@ -930,7 +1032,7 @@ fn mask_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_device_id_is_stable() {
         let id1 = get_device_id();
@@ -938,20 +1040,20 @@ mod tests {
         assert_eq!(id1, id2);
         assert!(id1.starts_with("WVT-"));
     }
-    
+
     #[test]
     fn test_device_label() {
         let label = get_device_label();
         assert!(!label.is_empty());
         assert!(label.contains('('));
     }
-    
+
     #[test]
     fn test_mask_key() {
         assert_eq!(mask_key("ABC"), "****");
         assert_eq!(mask_key("ABC-DEF-GHI-JKL"), "****-JKL");
     }
-    
+
     #[test]
     fn test_license_status_allows_usage() {
         assert!(LicenseStatus::Granted.allows_usage());

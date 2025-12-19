@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result, params};
+use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -62,6 +62,8 @@ pub struct LicenseData {
     pub is_activated: bool,
     pub last_validated_at: Option<String>,
     pub trial_started_at: Option<String>,
+    pub usage: i32,
+    pub validations: i32,
 }
 
 impl Default for LicenseData {
@@ -76,6 +78,8 @@ impl Default for LicenseData {
             is_activated: false,
             last_validated_at: None,
             trial_started_at: None,
+            usage: 0,
+            validations: 0,
         }
     }
 }
@@ -107,20 +111,20 @@ impl Database {
         std::fs::create_dir_all(&app_data_dir).ok();
         let db_path = app_data_dir.join("WaveType.db");
         let conn = Connection::open(db_path)?;
-        
+
         let db = Self {
             conn: Mutex::new(conn),
         };
-        
+
         db.init_tables()?;
         db.init_default_data()?;
-        
+
         Ok(db)
     }
 
     fn init_tables(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         // Settings table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
@@ -223,53 +227,143 @@ impl Database {
         )?;
 
         // Migration: add trial_started_at column if it doesn't exist
-        let _ = conn.execute(
-            "ALTER TABLE license ADD COLUMN trial_started_at TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE license ADD COLUMN trial_started_at TEXT", []);
+
+        // Migration: add usage and validations columns if they don't exist
+        let _ = conn.execute("ALTER TABLE license ADD COLUMN usage INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE license ADD COLUMN validations INTEGER NOT NULL DEFAULT 0", []);
 
         Ok(())
     }
 
     fn init_default_data(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         // Insert default settings if not exists
-        conn.execute(
-            "INSERT OR IGNORE INTO settings (id) VALUES (1)",
-            [],
-        )?;
+        conn.execute("INSERT OR IGNORE INTO settings (id) VALUES (1)", [])?;
 
         // Insert default app state if not exists
-        conn.execute(
-            "INSERT OR IGNORE INTO app_state (id) VALUES (1)",
-            [],
-        )?;
+        conn.execute("INSERT OR IGNORE INTO app_state (id) VALUES (1)", [])?;
 
         // Insert default license record if not exists
-        conn.execute(
-            "INSERT OR IGNORE INTO license (id) VALUES (1)",
-            [],
-        )?;
+        conn.execute("INSERT OR IGNORE INTO license (id) VALUES (1)", [])?;
 
         // Insert default Whisper models
         let models: Vec<(&str, &str, &str, i64, &str, &str)> = vec![
-            ("tiny", "Tiny", "75 MB", 75_i64 * 1024 * 1024, "Fastest model, lower accuracy. Good for quick notes.", "[\"en\"]"),
-            ("base", "Base", "142 MB", 142_i64 * 1024 * 1024, "Balanced speed and accuracy. Recommended for most users.", "[\"en\"]"),
-            ("small", "Small", "466 MB", 466_i64 * 1024 * 1024, "Higher accuracy, slower than Base. Good for longer dictation.", "[\"en\", \"bn\"]"),
-            ("medium", "Medium", "1.5 GB", 1536_i64 * 1024 * 1024, "Best accuracy for most languages. Requires more RAM.", "[\"en\", \"bn\"]"),
-            ("large-v3", "Large v3", "2.9 GB", 2969_i64 * 1024 * 1024, "Highest accuracy multilingual. Best for professional use.", "[\"en\", \"bn\"]"),
-            ("large-v3-turbo", "Large v3 Turbo", "1.6 GB", 1600_i64 * 1024 * 1024, "Fast large model. Great speed/accuracy balance.", "[\"en\", \"bn\"]"),
+            (
+                "tiny",
+                "Tiny",
+                "75 MB",
+                75_i64 * 1024 * 1024,
+                "Fastest model, lower accuracy. Good for quick notes.",
+                "[\"en\"]",
+            ),
+            (
+                "base",
+                "Base",
+                "142 MB",
+                142_i64 * 1024 * 1024,
+                "Balanced speed and accuracy. Recommended for most users.",
+                "[\"en\"]",
+            ),
+            (
+                "small",
+                "Small",
+                "466 MB",
+                466_i64 * 1024 * 1024,
+                "Higher accuracy, slower than Base. Good for longer dictation.",
+                "[\"en\", \"bn\"]",
+            ),
+            (
+                "medium",
+                "Medium",
+                "1.5 GB",
+                1536_i64 * 1024 * 1024,
+                "Best accuracy for most languages. Requires more RAM.",
+                "[\"en\", \"bn\"]",
+            ),
+            (
+                "large-v3",
+                "Large v3",
+                "2.9 GB",
+                2969_i64 * 1024 * 1024,
+                "Highest accuracy multilingual. Best for professional use.",
+                "[\"en\", \"bn\"]",
+            ),
+            (
+                "large-v3-turbo",
+                "Large v3 Turbo",
+                "1.6 GB",
+                1600_i64 * 1024 * 1024,
+                "Fast large model. Great speed/accuracy balance.",
+                "[\"en\", \"bn\"]",
+            ),
             // English-only models (faster)
-            ("tiny.en", "Tiny English", "75 MB", 75_i64 * 1024 * 1024, "Fastest English-only. Great for quick notes.", "[\"en\"]"),
-            ("base.en", "Base English", "142 MB", 142_i64 * 1024 * 1024, "Fast English-only with good accuracy.", "[\"en\"]"),
-            ("small.en", "Small English", "466 MB", 466_i64 * 1024 * 1024, "Accurate English-only model.", "[\"en\"]"),
-            ("medium.en", "Medium English", "1.5 GB", 1536_i64 * 1024 * 1024, "High accuracy English-only.", "[\"en\"]"),
+            (
+                "tiny.en",
+                "Tiny English",
+                "75 MB",
+                75_i64 * 1024 * 1024,
+                "Fastest English-only. Great for quick notes.",
+                "[\"en\"]",
+            ),
+            (
+                "base.en",
+                "Base English",
+                "142 MB",
+                142_i64 * 1024 * 1024,
+                "Fast English-only with good accuracy.",
+                "[\"en\"]",
+            ),
+            (
+                "small.en",
+                "Small English",
+                "466 MB",
+                466_i64 * 1024 * 1024,
+                "Accurate English-only model.",
+                "[\"en\"]",
+            ),
+            (
+                "medium.en",
+                "Medium English",
+                "1.5 GB",
+                1536_i64 * 1024 * 1024,
+                "High accuracy English-only.",
+                "[\"en\"]",
+            ),
             // Distil-Whisper models (6x faster)
-            ("distil-small.en", "Distil Small", "166 MB", 166_i64 * 1024 * 1024, "6x faster than Small. Great for real-time.", "[\"en\"]"),
-            ("distil-medium.en", "Distil Medium", "390 MB", 390_i64 * 1024 * 1024, "6x faster than Medium. Best speed/accuracy.", "[\"en\"]"),
-            ("distil-large-v2", "Distil Large v2", "756 MB", 756_i64 * 1024 * 1024, "Fast large model with near-equal accuracy.", "[\"en\"]"),
-            ("distil-large-v3", "Distil Large v3", "756 MB", 756_i64 * 1024 * 1024, "Latest distilled model. Excellent performance.", "[\"en\"]"),
+            (
+                "distil-small.en",
+                "Distil Small",
+                "166 MB",
+                166_i64 * 1024 * 1024,
+                "6x faster than Small. Great for real-time.",
+                "[\"en\"]",
+            ),
+            (
+                "distil-medium.en",
+                "Distil Medium",
+                "390 MB",
+                390_i64 * 1024 * 1024,
+                "6x faster than Medium. Best speed/accuracy.",
+                "[\"en\"]",
+            ),
+            (
+                "distil-large-v2",
+                "Distil Large v2",
+                "756 MB",
+                756_i64 * 1024 * 1024,
+                "Fast large model with near-equal accuracy.",
+                "[\"en\"]",
+            ),
+            (
+                "distil-large-v3",
+                "Distil Large v3",
+                "756 MB",
+                756_i64 * 1024 * 1024,
+                "Latest distilled model. Excellent performance.",
+                "[\"en\"]",
+            ),
         ];
 
         for (id, name, size, size_bytes, description, languages) in models {
@@ -365,9 +459,11 @@ impl Database {
         ];
 
         if !ALLOWED_KEYS.contains(&key) {
-            return Err(rusqlite::Error::InvalidParameterName(
-                format!("Invalid setting key: {}", key),
-            ).into());
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "Invalid setting key: {}",
+                key
+            ))
+            .into());
         }
 
         let conn = self.conn.lock().unwrap();
@@ -440,23 +536,24 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, name, size, size_bytes, description, languages, downloaded, download_path
-             FROM models ORDER BY size_bytes ASC"
+             FROM models ORDER BY size_bytes ASC",
         )?;
-        
-        let models = stmt.query_map([], |row| {
-            Ok(WhisperModel {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                size: row.get(2)?,
-                size_bytes: row.get(3)?,
-                description: row.get(4)?,
-                languages: row.get(5)?,
-                downloaded: row.get::<_, i32>(6)? == 1,
-                download_path: row.get(7)?,
-            })
-        })?
-        .collect::<Result<Vec<_>>>()?;
-        
+
+        let models = stmt
+            .query_map([], |row| {
+                Ok(WhisperModel {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    size: row.get(2)?,
+                    size_bytes: row.get(3)?,
+                    description: row.get(4)?,
+                    languages: row.get(5)?,
+                    downloaded: row.get::<_, i32>(6)? == 1,
+                    download_path: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(models)
     }
 
@@ -464,26 +561,33 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, name, size, size_bytes, description, languages, downloaded, download_path
-             FROM models WHERE id = ?1"
+             FROM models WHERE id = ?1",
         )?;
-        
-        let model = stmt.query_row(params![id], |row| {
-            Ok(WhisperModel {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                size: row.get(2)?,
-                size_bytes: row.get(3)?,
-                description: row.get(4)?,
-                languages: row.get(5)?,
-                downloaded: row.get::<_, i32>(6)? == 1,
-                download_path: row.get(7)?,
+
+        let model = stmt
+            .query_row(params![id], |row| {
+                Ok(WhisperModel {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    size: row.get(2)?,
+                    size_bytes: row.get(3)?,
+                    description: row.get(4)?,
+                    languages: row.get(5)?,
+                    downloaded: row.get::<_, i32>(6)? == 1,
+                    download_path: row.get(7)?,
+                })
             })
-        }).ok();
-        
+            .ok();
+
         Ok(model)
     }
 
-    pub fn set_model_downloaded(&self, id: &str, downloaded: bool, path: Option<&str>) -> Result<()> {
+    pub fn set_model_downloaded(
+        &self,
+        id: &str,
+        downloaded: bool,
+        path: Option<&str>,
+    ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "UPDATE models SET downloaded = ?1, download_path = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
@@ -509,7 +613,13 @@ impl Database {
     }
 
     // Transcription history operations
-    pub fn add_transcription(&self, text: &str, model_id: &str, language: &str, duration_ms: i64) -> Result<i64> {
+    pub fn add_transcription(
+        &self,
+        text: &str,
+        model_id: &str,
+        language: &str,
+        duration_ms: i64,
+    ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT INTO transcription_history (text, model_id, language, duration_ms)
@@ -519,37 +629,41 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
-    pub fn get_transcription_history(&self, limit: i32, offset: i32) -> Result<Vec<TranscriptionHistory>> {
+    pub fn get_transcription_history(
+        &self,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<TranscriptionHistory>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, text, model_id, language, duration_ms, created_at
              FROM transcription_history
              ORDER BY created_at DESC
-             LIMIT ?1 OFFSET ?2"
+             LIMIT ?1 OFFSET ?2",
         )?;
-        
-        let history = stmt.query_map(params![limit, offset], |row| {
-            Ok(TranscriptionHistory {
-                id: row.get(0)?,
-                text: row.get(1)?,
-                model_id: row.get(2)?,
-                language: row.get(3)?,
-                duration_ms: row.get(4)?,
-                created_at: row.get(5)?,
-            })
-        })?
-        .collect::<Result<Vec<_>>>()?;
-        
+
+        let history = stmt
+            .query_map(params![limit, offset], |row| {
+                Ok(TranscriptionHistory {
+                    id: row.get(0)?,
+                    text: row.get(1)?,
+                    model_id: row.get(2)?,
+                    language: row.get(3)?,
+                    duration_ms: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(history)
     }
 
     pub fn get_transcription_history_count(&self) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM transcription_history",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM transcription_history", [], |row| {
+                row.get(0)
+            })?;
         Ok(count)
     }
 
@@ -561,7 +675,10 @@ impl Database {
 
     pub fn delete_transcription(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM transcription_history WHERE id = ?1", params![id])?;
+        conn.execute(
+            "DELETE FROM transcription_history WHERE id = ?1",
+            params![id],
+        )?;
         Ok(())
     }
 
@@ -570,7 +687,8 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.query_row(
             "SELECT license_key, activation_id, status, customer_email, customer_name, 
-                    expires_at, is_activated, last_validated_at, trial_started_at
+                    expires_at, is_activated, last_validated_at, trial_started_at,
+                    usage, validations
              FROM license WHERE id = 1",
             [],
             |row| {
@@ -584,6 +702,8 @@ impl Database {
                     is_activated: row.get::<_, i32>(6)? != 0,
                     last_validated_at: row.get(7)?,
                     trial_started_at: row.get(8)?,
+                    usage: row.get(9)?,
+                    validations: row.get(10)?,
                 })
             },
         )
@@ -602,6 +722,8 @@ impl Database {
                 is_activated = ?7,
                 last_validated_at = ?8,
                 trial_started_at = ?9,
+                usage = ?10,
+                validations = ?11,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -614,6 +736,8 @@ impl Database {
                 license.is_activated as i32,
                 license.last_validated_at,
                 license.trial_started_at,
+                license.usage,
+                license.validations,
             ],
         )?;
         Ok(())
@@ -636,6 +760,8 @@ impl Database {
                 expires_at = NULL,
                 is_activated = 0,
                 last_validated_at = NULL,
+                usage = 0,
+                validations = 0,
                 -- trial_started_at is preserved intentionally
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",

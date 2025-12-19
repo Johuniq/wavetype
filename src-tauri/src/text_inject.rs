@@ -10,7 +10,7 @@ impl TextInjector {
     pub fn new() -> Result<Self, String> {
         let enigo = Enigo::new(&Settings::default())
             .map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
-        
+
         Ok(Self { enigo })
     }
 
@@ -29,12 +29,12 @@ impl TextInjector {
 
         Ok(())
     }
-    
+
     /// Execute a keyboard shortcut
     pub fn execute_shortcut(&mut self, shortcut: &str) -> Result<(), String> {
         // Small delay to ensure focus
         thread::sleep(Duration::from_millis(50));
-        
+
         match shortcut {
             "undo" => {
                 // Ctrl+Z (or Cmd+Z on macOS)
@@ -223,10 +223,10 @@ impl TextInjector {
                 return Err(format!("Unknown shortcut: {}", shortcut));
             }
         }
-        
+
         // Small delay after shortcut
         thread::sleep(Duration::from_millis(30));
-        
+
         Ok(())
     }
 }

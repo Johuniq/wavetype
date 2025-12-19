@@ -26,7 +26,8 @@ impl ModelDownloader {
     }
 
     pub fn get_model_path(&self, model_id: &str) -> PathBuf {
-        self.models_dir.join(crate::transcription::get_model_filename(model_id))
+        self.models_dir
+            .join(crate::transcription::get_model_filename(model_id))
     }
 
     pub fn is_model_downloaded(&self, model_id: &str) -> bool {
@@ -66,7 +67,10 @@ impl ModelDownloader {
             .map_err(|e| format!("Failed to start download: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("Download failed with status: {}", response.status()));
+            return Err(format!(
+                "Download failed with status: {}",
+                response.status()
+            ));
         }
 
         let total_size = response.content_length().unwrap_or(0);
@@ -80,7 +84,7 @@ impl ModelDownloader {
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
-            
+
             file.write_all(&chunk)
                 .await
                 .map_err(|e| format!("Failed to write chunk: {}", e))?;
@@ -115,7 +119,7 @@ impl ModelDownloader {
 
     pub async fn delete_model(&self, model_id: &str) -> Result<(), String> {
         let model_path = self.get_model_path(model_id);
-        
+
         if model_path.exists() {
             tokio::fs::remove_file(&model_path)
                 .await

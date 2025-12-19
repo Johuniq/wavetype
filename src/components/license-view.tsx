@@ -1,42 +1,43 @@
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import {
-  activateLicense,
-  deactivateLicense,
-  formatExpirationDate,
-  getLicense,
-  getLicenseStatusMessage,
-  isLicenseActive,
-  maskLicenseKey,
-  validateLicense,
-  type LicenseData,
+    activateLicense,
+    deactivateLicense,
+    formatExpirationDate,
+    getLicense,
+    getLicenseStatusMessage,
+    isLicenseActive,
+    maskLicenseKey,
+    validateLicense,
+    type LicenseData,
 } from "@/lib/license-api";
 import { openUrl } from "@/lib/utils";
 import {
-  AlertCircle,
-  ArrowLeft,
-  Check,
-  Clock,
-  ExternalLink,
-  Key,
-  Loader2,
-  RefreshCw,
-  Shield,
-  ShieldCheck,
-  ShieldX,
-  Sparkles,
-  Trash2,
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    Clock,
+    ExternalLink,
+    Key,
+    Loader2,
+    RefreshCw,
+    Shield,
+    ShieldCheck,
+    ShieldX,
+    Sparkles,
+    Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -55,6 +56,61 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const { success: toastSuccess, error: toastError, info: toastInfo } =
+    useToast();
+
+  // Helper to extract useful messages from various error shapes returned by Tauri
+  const extractErrorMessage = (err: any): string => {
+    try {
+      if (!err) return "Unknown error";
+      // If it's a plain string
+      if (typeof err === "string") {
+        // try to pull PolarError detail if present
+        const m = err.match(/detail: Some\\("([^"]+)"\\)/);
+        if (m && m[1]) return m[1];
+        return err;
+      }
+
+      // If it's a JS Error
+      if (err instanceof Error) {
+        return err.message;
+      }
+
+      // Some invoke errors come wrapped { payload: '...'} or { message: '...'}
+      if (typeof err === "object") {
+        if (err.payload) {
+          // payload might be a stringified error
+          const p = err.payload as any;
+          if (typeof p === "string") {
+            const m = p.match(/detail: Some\\("([^"]+)"\\)/);
+            if (m && m[1]) return m[1];
+            return p;
+          }
+        }
+
+        if (err.message) {
+          const m = String(err.message).match(/detail: Some\\("([^"]+)"\\)/);
+          if (m && m[1]) return m[1];
+          return String(err.message);
+        }
+
+        // Fallback to JSON stringify
+        try {
+          const s = JSON.stringify(err);
+          const m = s.match(/detail\\\":\\\"([^\\\"]+)\\\"/);
+          if (m && m[1]) return m[1];
+          return s;
+        } catch {
+          return String(err);
+        }
+      }
+
+      return String(err);
+    } catch (e) {
+      return "Unknown error";
+    }
+  };
+
   // Load license on mount
   useEffect(() => {
     loadLicense();
@@ -68,7 +124,8 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       setLicense(data);
       onLicenseChange?.(data.is_activated && data.status === "active");
     } catch (err) {
-      console.error("Failed to load license:", err);
+      const msg = err instanceof Error ? err.message : "Failed to load license";
+      toastError("Failed to load license", msg);
       setError("Failed to load license information");
     } finally {
       setIsLoading(false);
@@ -90,12 +147,12 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       setLicense(data);
       setLicenseKey("");
       setSuccess("License activated successfully!");
+      toastSuccess("License activated", "License activated successfully");
       onLicenseChange?.(data.is_activated && data.status === "active");
     } catch (err) {
-      console.error("Failed to activate license:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to activate license"
-      );
+      const msg = extractErrorMessage(err) || "Failed to activate license";
+      toastError("Activation failed", msg);
+      setError(msg);
     } finally {
       setIsActivating(false);
     }
@@ -116,10 +173,10 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       }
       onLicenseChange?.(data.is_activated && data.status === "active");
     } catch (err) {
+      const msg = extractErrorMessage(err) || "Failed to validate license";
       console.error("Failed to validate license:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to validate license"
-      );
+      toastError("Validation failed", msg);
+      setError(msg);
     } finally {
       setIsValidating(false);
     }
@@ -144,10 +201,10 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       setSuccess(message);
       onLicenseChange?.(false);
     } catch (err) {
+      const msg = extractErrorMessage(err) || "Failed to deactivate license";
       console.error("Failed to deactivate license:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to deactivate license"
-      );
+      toastError("Deactivate failed", msg);
+      setError(msg);
     } finally {
       setIsDeactivating(false);
     }
@@ -302,6 +359,25 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                       </span>
                     </div>
                   )}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
+                    <span className="text-xs text-foreground/60">
+                      Activations
+                    </span>
+                    <span className="text-sm text-foreground/80">
+                      {license.usage}
+                      {license.limit_activations
+                        ? ` / ${license.limit_activations}`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
+                    <span className="text-xs text-foreground/60">
+                      Validations
+                    </span>
+                    <span className="text-sm text-foreground/80">
+                      {license.validations}
+                    </span>
+                  </div>
                 </div>
               )}
 

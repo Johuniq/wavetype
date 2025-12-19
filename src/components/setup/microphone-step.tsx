@@ -184,7 +184,7 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
           {status === "granted" && !isTestingMic && testCompleted ? (
             <button
               onClick={onNext}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+              className="glass-button flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
             >
               Continue
             </button>
@@ -214,7 +214,7 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
               <button
                 onClick={requestPermission}
                 disabled={status === "checking"}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+                className="glass-button flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
               >
                 {status === "checking" ? "Checking..." : "Test Mic"}
               </button>

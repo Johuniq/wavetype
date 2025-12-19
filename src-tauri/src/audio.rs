@@ -98,15 +98,15 @@ impl AudioRecorder {
 
     pub fn cancel_recording(&mut self) {
         self.is_recording.store(false, Ordering::SeqCst);
-        
+
         if let Some(sender) = self.command_sender.take() {
             let _ = sender.send(RecorderCommand::Stop);
         }
-        
+
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
-        
+
         self.samples.lock().unwrap().clear();
     }
 }
@@ -117,22 +117,26 @@ fn run_recording_thread(
     is_recording: Arc<AtomicBool>,
 ) -> Result<(), String> {
     println!("[AUDIO] Recording thread started");
-    
+
     let host = cpal::default_host();
     println!("[AUDIO] Host: {:?}", host.id());
-    
+
     let device = host
         .default_input_device()
         .ok_or("No input device available")?;
-    
+
     println!("[AUDIO] Device: {:?}", device.name().unwrap_or_default());
 
     let config = device
         .default_input_config()
         .map_err(|e| format!("Failed to get default input config: {}", e))?;
 
-    println!("[AUDIO] Sample rate: {}, Channels: {}, Format: {:?}", 
-             config.sample_rate().0, config.channels(), config.sample_format());
+    println!(
+        "[AUDIO] Sample rate: {}, Channels: {}, Format: {:?}",
+        config.sample_rate().0,
+        config.channels(),
+        config.sample_format()
+    );
 
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
@@ -148,7 +152,13 @@ fn run_recording_thread(
                 &config.into(),
                 move |data: &[f32], _: &_| {
                     if is_recording.load(Ordering::SeqCst) {
-                        process_audio_data(data, channels, sample_rate, target_sample_rate, &samples);
+                        process_audio_data(
+                            data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                        );
                     }
                 },
                 err_fn,
@@ -162,8 +172,15 @@ fn run_recording_thread(
                 &config.into(),
                 move |data: &[i16], _: &_| {
                     if is_recording.load(Ordering::SeqCst) {
-                        let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                        process_audio_data(&float_data, channels, sample_rate, target_sample_rate, &samples);
+                        let float_data: Vec<f32> =
+                            data.iter().map(|&s| s.to_float_sample()).collect();
+                        process_audio_data(
+                            &float_data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                        );
                     }
                 },
                 err_fn,
@@ -177,8 +194,15 @@ fn run_recording_thread(
                 &config.into(),
                 move |data: &[u16], _: &_| {
                     if is_recording.load(Ordering::SeqCst) {
-                        let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                        process_audio_data(&float_data, channels, sample_rate, target_sample_rate, &samples);
+                        let float_data: Vec<f32> =
+                            data.iter().map(|&s| s.to_float_sample()).collect();
+                        process_audio_data(
+                            &float_data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                        );
                     }
                 },
                 err_fn,
@@ -189,7 +213,9 @@ fn run_recording_thread(
     }
     .map_err(|e| format!("Failed to build input stream: {}", e))?;
 
-    stream.play().map_err(|e| format!("Failed to start stream: {}", e))?;
+    stream
+        .play()
+        .map_err(|e| format!("Failed to start stream: {}", e))?;
 
     // Wait for stop command or check is_recording flag
     // Using 100ms polling instead of 50ms to reduce CPU wake-ups
@@ -273,11 +299,13 @@ pub fn save_wav(samples: &[f32], path: &str) -> Result<(), String> {
 
     for &sample in samples {
         let amplitude = (sample * 32767.0) as i16;
-        writer.write_sample(amplitude)
+        writer
+            .write_sample(amplitude)
             .map_err(|e| format!("Failed to write sample: {}", e))?;
     }
 
-    writer.finalize()
+    writer
+        .finalize()
         .map_err(|e| format!("Failed to finalize WAV: {}", e))?;
 
     Ok(())

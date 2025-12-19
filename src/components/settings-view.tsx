@@ -772,11 +772,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               <Logo size="sm" />
             </div>
             <p className="text-xs text-foreground/60">
-              Voice typing fast and privately with AI
+             Private, Local Voice-to-Text for Desktop
             </p>
             <div className="h-px w-16 bg-border/50 my-3" />
             <p className="text-xs text-foreground/60">
-              © 2025 JohUniq. All rights reserved.
+              © {new Date().getFullYear()} Johuniq. All rights reserved.
             </p>
           </div>
         </div>

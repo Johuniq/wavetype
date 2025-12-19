@@ -1,3 +1,4 @@
+import { useToast } from "@/hooks/use-toast";
 import {
   activateLicense,
   getLicense,
@@ -47,7 +48,9 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
       const data = await getLicense();
       setLicense(data);
     } catch (err) {
-      console.error("Failed to load license:", err);
+      const msg = err instanceof Error ? err.message : "Failed to load license";
+      const { error: toastError } = useToast();
+      toastError("Failed to load license", msg);
     } finally {
       setIsLoading(false);
     }
@@ -63,26 +66,28 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
     setError(null);
     setSuccess(null);
 
+    const { success: toastSuccess, error: toastError } = useToast();
     try {
       const data = await activateLicense(licenseKey.trim());
       setLicense(data);
       setLicenseKey("");
       setSuccess("License activated successfully!");
+      toastSuccess("License activated", "License activated successfully");
       // Auto proceed after successful activation
       setTimeout(() => {
         onNext();
       }, 1500);
     } catch (err) {
-      console.error("Failed to activate license:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to activate license"
-      );
+      const msg = err instanceof Error ? err.message : "Failed to activate license";
+      toastError("Activation failed", msg);
+      setError(msg);
     } finally {
       setIsActivating(false);
     }
   };
 
   const handleStartTrial = async () => {
+    const { success: toastSuccess, error: toastError } = useToast();
     setIsStartingTrial(true);
     setError(null);
     setSuccess(null);
@@ -91,13 +96,15 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
       const data = await startTrial();
       setLicense(data);
       setSuccess("7-day trial started!");
+      toastSuccess("Trial started", "Your 7-day trial has started");
       // Auto proceed after starting trial
       setTimeout(() => {
         onNext();
       }, 1500);
     } catch (err) {
-      console.error("Failed to start trial:", err);
-      setError(err instanceof Error ? err.message : "Failed to start trial");
+      const msg = err instanceof Error ? err.message : "Failed to start trial";
+      toastError("Trial failed", msg);
+      setError(msg);
     } finally {
       setIsStartingTrial(false);
     }
@@ -194,7 +201,11 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           )}
 
           {/* Main content - options or activation form */}
-          {!showActivationForm ? (
+          {isActive ? (
+            <div className="flex-1 flex items-center justify-center">
+              {/* License already active - options hidden */}
+            </div>
+          ) : !showActivationForm ? (
             <div className="space-y-3 flex-1">
               {/* Trial Option */}
               <button
@@ -355,7 +366,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           <button
             onClick={onBack}
             className={cn(
-              "flex-1 py-3 px-6 rounded-xl font-medium",
+              "glass-button flex-1 py-3 px-6 rounded-xl font-medium",
               "bg-white/30 dark:bg-white/10 backdrop-blur-xl",
               "border border-white/50 dark:border-white/10",
               "text-foreground/80",
@@ -371,7 +382,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
             <button
               onClick={onNext}
               className={cn(
-                "flex-1 py-3 px-6 rounded-xl font-semibold",
+                "glass-button flex-1 py-3 px-6 rounded-xl font-semibold",
                 "bg-foreground/90 hover:bg-foreground",
                 "text-white shadow-lg shadow-foreground/25",
                 "transition-all duration-200",

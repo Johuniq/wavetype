@@ -241,13 +241,13 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
 
           {/* Output Mode Selection */}
           <div className="space-y-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-sm mb-2 font-medium text-foreground">
               Output Mode
             </span>
             <RadioGroup
               value={selectedOutputMode}
               onValueChange={(v) => setSelectedOutputMode(v as OutputMode)}
-              className="space-y-2"
+              className="space-y-2 mt-2"
             >
               {outputOptions.map((option) => (
                 <Label
@@ -291,7 +291,7 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
           <button
             onClick={handleContinue}
             disabled={conflict !== null}
-            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
           >
             Complete Setup
           </button>

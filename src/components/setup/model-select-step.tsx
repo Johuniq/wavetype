@@ -170,7 +170,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                           {model.name}
                         </span>
                         {model.recommended && (
-                          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-foreground/90 text-white font-medium">
+                          <span className="glass-badge flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-foreground/90 text-white bg-green font-medium">
                             <Sparkles className="h-3 w-3" />
                             Recommended
                           </span>
@@ -240,7 +240,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
             <button
               onClick={handleDownload}
               disabled={!selectedModel || isDownloading}
-              className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+              className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
             >
               {isDownloading ? (
                 <>
@@ -258,7 +258,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
             <button
               onClick={onNext}
               disabled={!canContinue}
-              className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+              className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
             >
               <Check className="h-4 w-4" />
               Continue

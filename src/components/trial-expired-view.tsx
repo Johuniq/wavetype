@@ -1,25 +1,26 @@
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { activateLicense } from "@/lib/license-api";
 import { openUrl } from "@/lib/utils";
 import {
-  AlertCircle,
-  Check,
-  Clock,
-  ExternalLink,
-  Key,
-  Loader2,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
+    AlertCircle,
+    Check,
+    Clock,
+    ExternalLink,
+    Key,
+    Loader2,
+    ShieldAlert,
+    ShieldCheck,
+    Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -46,21 +47,24 @@ export function TrialExpiredView({
     setError(null);
     setSuccess(null);
 
+    const { success: toastSuccess, error: toastError } = useToast();
     try {
       const data = await activateLicense(licenseKey.trim());
       if (data.is_activated && data.status === "active") {
         setSuccess("License activated successfully!");
+        toastSuccess("License activated", "License activated successfully");
         setTimeout(() => {
           onLicenseActivated();
         }, 1500);
       } else {
-        setError("License activation failed. Please check your key.");
+        const msg = "License activation failed. Please check your key.";
+        toastError("Activation failed", msg);
+        setError(msg);
       }
     } catch (err) {
-      console.error("Failed to activate license:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to activate license"
-      );
+      const msg = err instanceof Error ? err.message : "Failed to activate license";
+      toastError("Activation failed", msg);
+      setError(msg);
     } finally {
       setIsActivating(false);
     }

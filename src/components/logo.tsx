@@ -1,4 +1,4 @@
-import wavetypeLogo from "@/assets/wavetype.png";
+import wavetypeLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {

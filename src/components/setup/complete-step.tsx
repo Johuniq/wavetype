@@ -21,7 +21,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
 
       <div className="flex flex-col h-full min-h-0 px-6 py-8">
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-auto">
-          <div className="h-16 w-16 rounded-2xl bg-green-500/10 flex items-center justify-center mb-4 glass-card">
+          <div className="h-14 w-14 rounded-full p-2 bg-green-500/10 flex items-center justify-center mb-4 glass-card">
             <CheckCircle2 className="h-8 w-8 text-green-500" />
           </div>
 
@@ -73,7 +73,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
             </div>
           </div>
 
-          <div className="glass-card w-full mt-3 p-4 rounded-2xl">
+          <div className="glass-card w-full my-3 p-4 rounded-2xl">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-foreground/60" />
               <p className="text-sm font-medium text-foreground">How to use</p>
@@ -107,7 +107,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
 
         <button
           onClick={onFinish}
-          className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+          className="glass-button w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
         >
           <Sparkles className="h-4 w-4" />
           Start Using WaveType

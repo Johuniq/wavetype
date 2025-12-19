@@ -8,7 +8,7 @@
 //! - Optional telemetry hooks (disabled by default for privacy)
 
 use chrono::{DateTime, Utc};
-use log::{error, warn, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::backtrace::Backtrace;
 use std::collections::HashMap;
@@ -210,13 +210,13 @@ impl ErrorReporter {
     pub fn init(log_dir: PathBuf) {
         let _ = ERROR_REPORTER.get_or_init(|| {
             let reporter = Arc::new(ErrorReporter::new(log_dir));
-            
+
             // Set up panic hook for crash reporting
             let reporter_clone = reporter.clone();
             panic::set_hook(Box::new(move |info| {
                 reporter_clone.handle_panic(info);
             }));
-            
+
             info!("Error reporter initialized");
             reporter
         });
@@ -230,7 +230,7 @@ impl ErrorReporter {
     /// Report an error
     pub fn report(&self, error: ErrorReport) {
         let fingerprint = error.fingerprint();
-        
+
         // Update occurrence count
         let occurrence_count = {
             let mut counts = self.error_counts.lock().unwrap();
@@ -262,16 +262,16 @@ impl ErrorReporter {
         if occurrence_count <= 10 || occurrence_count % 100 == 0 {
             let mut error_with_count = error.clone();
             error_with_count.occurrence_count = occurrence_count;
-            
+
             // Add to recent errors
             let mut recent = self.recent_errors.lock().unwrap();
             recent.push(error_with_count.clone());
-            
+
             // Trim if too many
             if recent.len() > self.max_recent_errors {
                 recent.remove(0);
             }
-            
+
             // Write to log file for critical+ errors
             if error.severity as u8 >= ErrorSeverity::Error as u8 {
                 self.write_error_to_file(&error_with_count);
@@ -289,8 +289,10 @@ impl ErrorReporter {
             "Unknown panic".to_string()
         };
 
-        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
-        
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
+
         let crash_report = CrashReport {
             id: uuid::Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
@@ -308,7 +310,7 @@ impl ErrorReporter {
             error!("Location: {}", loc);
         }
         error!("Thread: {:?}", crash_report.thread_name);
-        
+
         // Write crash report to file
         self.write_crash_report(&crash_report);
     }
@@ -317,12 +319,8 @@ impl ErrorReporter {
     fn write_error_to_file(&self, error: &ErrorReport) {
         let filename = format!("errors-{}.log", Utc::now().format("%Y-%m-%d"));
         let filepath = self.log_dir.join(filename);
-        
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&filepath)
-        {
+
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&filepath) {
             let log_line = format!(
                 "[{}] {} | {} | {} | {}\n",
                 error.timestamp.format("%Y-%m-%d %H:%M:%S%.3f"),
@@ -339,15 +337,15 @@ impl ErrorReporter {
     fn write_crash_report(&self, crash: &CrashReport) {
         let filename = format!("crash-{}.json", crash.timestamp.format("%Y%m%d-%H%M%S"));
         let filepath = self.log_dir.join(filename);
-        
+
         if let Ok(json) = serde_json::to_string_pretty(crash) {
             let _ = fs::write(&filepath, json);
         }
-        
+
         // Also write a human-readable version
         let txt_filename = format!("crash-{}.txt", crash.timestamp.format("%Y%m%d-%H%M%S"));
         let txt_filepath = self.log_dir.join(txt_filename);
-        
+
         let report = format!(
             "=== WaveType Crash Report ===\n\
             Time: {}\n\
@@ -376,12 +374,12 @@ impl ErrorReporter {
         let errors = self.recent_errors.lock().unwrap();
         let mut by_category: HashMap<String, u32> = HashMap::new();
         let mut by_severity: HashMap<String, u32> = HashMap::new();
-        
+
         for error in errors.iter() {
             *by_category.entry(error.category.to_string()).or_insert(0) += 1;
             *by_severity.entry(error.severity.to_string()).or_insert(0) += 1;
         }
-        
+
         ErrorStats {
             total_errors: errors.len() as u32,
             by_category,
@@ -393,7 +391,7 @@ impl ErrorReporter {
     #[allow(dead_code)]
     pub fn cleanup_old_logs(&self, days: u32) {
         let cutoff = Utc::now() - chrono::Duration::days(days as i64);
-        
+
         if let Ok(entries) = fs::read_dir(&self.log_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
@@ -416,7 +414,7 @@ impl ErrorReporter {
         output.push_str(&format!("Generated: {}\n", Utc::now()));
         output.push_str(&format!("Version: {}\n", env!("CARGO_PKG_VERSION")));
         output.push_str(&format!("OS: {}\n\n", get_os_info()));
-        
+
         output.push_str("=== Recent Errors ===\n\n");
         for error in self.get_recent_errors() {
             output.push_str(&format!(
@@ -431,7 +429,7 @@ impl ErrorReporter {
             }
             output.push('\n');
         }
-        
+
         output.push_str("=== Error Statistics ===\n\n");
         let stats = self.get_error_stats();
         output.push_str(&format!("Total: {}\n", stats.total_errors));
@@ -443,7 +441,7 @@ impl ErrorReporter {
         for (sev, count) in &stats.by_severity {
             output.push_str(&format!("  {}: {}\n", sev, count));
         }
-        
+
         Ok(output)
     }
 
@@ -479,16 +477,19 @@ impl ErrorReporter {
     pub fn export_to_markdown(&self) -> String {
         let errors = self.get_recent_errors();
         let stats = self.get_error_stats();
-        
+
         let mut md = String::new();
         md.push_str("# WaveType Error Report\n\n");
-        md.push_str(&format!("**Generated:** {}\n\n", Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        md.push_str(&format!(
+            "**Generated:** {}\n\n",
+            Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        ));
         md.push_str(&format!("**Version:** {}\n\n", env!("CARGO_PKG_VERSION")));
         md.push_str(&format!("**OS:** {}\n\n", get_os_info()));
-        
+
         md.push_str("## Statistics\n\n");
         md.push_str(&format!("- **Total Errors:** {}\n\n", stats.total_errors));
-        
+
         md.push_str("### By Category\n\n");
         for (cat, count) in &stats.by_category {
             md.push_str(&format!("- {}: {}\n", cat, count));
@@ -497,7 +498,7 @@ impl ErrorReporter {
         for (sev, count) in &stats.by_severity {
             md.push_str(&format!("- {}: {}\n", sev, count));
         }
-        
+
         md.push_str("\n## Recent Errors\n\n");
         for error in errors.iter().rev().take(50) {
             md.push_str(&format!(
@@ -513,7 +514,7 @@ impl ErrorReporter {
             }
             md.push_str("\n---\n\n");
         }
-        
+
         md
     }
 
@@ -530,7 +531,7 @@ impl ErrorReporter {
     pub fn persist_to_file(&self, app_dir: &std::path::Path) -> Result<(), std::io::Error> {
         let errors_dir = app_dir.join("errors");
         fs::create_dir_all(&errors_dir)?;
-        
+
         let filepath = errors_dir.join("errors.json");
         let errors = self.get_recent_errors();
         let json = serde_json::to_string_pretty(&errors)?;
@@ -544,20 +545,20 @@ impl ErrorReporter {
         if !filepath.exists() {
             return Ok(0);
         }
-        
+
         let json = fs::read_to_string(filepath)?;
         let loaded_errors: Vec<ErrorReport> = serde_json::from_str(&json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        
+
         let count = loaded_errors.len();
         let mut errors = self.recent_errors.lock().unwrap();
         errors.extend(loaded_errors);
-        
+
         // Trim to max
         while errors.len() > self.max_recent_errors {
             errors.remove(0);
         }
-        
+
         Ok(count)
     }
 }
@@ -586,11 +587,7 @@ fn get_os_info() -> String {
 
 /// Report an error using the global reporter
 #[allow(dead_code)]
-pub fn report_error(
-    severity: ErrorSeverity,
-    category: ErrorCategory,
-    message: impl Into<String>,
-) {
+pub fn report_error(severity: ErrorSeverity, category: ErrorCategory, message: impl Into<String>) {
     if let Some(reporter) = ErrorReporter::global() {
         reporter.report(ErrorReport::new(severity, category, message));
     }
@@ -605,10 +602,7 @@ pub fn report_error_with_details(
     details: impl Into<String>,
 ) {
     if let Some(reporter) = ErrorReporter::global() {
-        reporter.report(
-            ErrorReport::new(severity, category, message)
-                .with_details(details)
-        );
+        reporter.report(ErrorReport::new(severity, category, message).with_details(details));
     }
 }
 
@@ -623,7 +617,7 @@ pub fn report_critical_error(
         reporter.report(
             ErrorReport::new(ErrorSeverity::Critical, category, message)
                 .with_details(details)
-                .with_backtrace()
+                .with_backtrace(),
         );
     }
 }
@@ -635,12 +629,8 @@ mod tests {
 
     #[test]
     fn test_error_report_creation() {
-        let report = ErrorReport::new(
-            ErrorSeverity::Error,
-            ErrorCategory::Audio,
-            "Test error",
-        );
-        
+        let report = ErrorReport::new(ErrorSeverity::Error, ErrorCategory::Audio, "Test error");
+
         assert_eq!(report.severity, ErrorSeverity::Error);
         assert_eq!(report.category, ErrorCategory::Audio);
         assert_eq!(report.message, "Test error");
@@ -655,7 +645,7 @@ mod tests {
         )
         .with_details("Timeout after 30s")
         .with_context("url", "https://example.com");
-        
+
         assert!(report.details.is_some());
         assert!(report.context.contains_key("url"));
     }
@@ -664,13 +654,13 @@ mod tests {
     fn test_error_reporter() {
         let dir = tempdir().unwrap();
         let reporter = ErrorReporter::new(dir.path().to_path_buf());
-        
+
         reporter.report(ErrorReport::new(
             ErrorSeverity::Error,
             ErrorCategory::Database,
             "Test error",
         ));
-        
+
         let recent = reporter.get_recent_errors();
         assert_eq!(recent.len(), 1);
     }
@@ -679,11 +669,23 @@ mod tests {
     fn test_error_stats() {
         let dir = tempdir().unwrap();
         let reporter = ErrorReporter::new(dir.path().to_path_buf());
-        
-        reporter.report(ErrorReport::new(ErrorSeverity::Error, ErrorCategory::Audio, "Error 1"));
-        reporter.report(ErrorReport::new(ErrorSeverity::Warning, ErrorCategory::Audio, "Warning 1"));
-        reporter.report(ErrorReport::new(ErrorSeverity::Error, ErrorCategory::Network, "Error 2"));
-        
+
+        reporter.report(ErrorReport::new(
+            ErrorSeverity::Error,
+            ErrorCategory::Audio,
+            "Error 1",
+        ));
+        reporter.report(ErrorReport::new(
+            ErrorSeverity::Warning,
+            ErrorCategory::Audio,
+            "Warning 1",
+        ));
+        reporter.report(ErrorReport::new(
+            ErrorSeverity::Error,
+            ErrorCategory::Network,
+            "Error 2",
+        ));
+
         let stats = reporter.get_error_stats();
         assert_eq!(stats.total_errors, 3);
     }
@@ -692,7 +694,7 @@ mod tests {
     fn test_fingerprint_deduplication() {
         let error1 = ErrorReport::new(ErrorSeverity::Error, ErrorCategory::Audio, "Same error");
         let error2 = ErrorReport::new(ErrorSeverity::Error, ErrorCategory::Audio, "Same error");
-        
+
         assert_eq!(error1.fingerprint(), error2.fingerprint());
     }
 }

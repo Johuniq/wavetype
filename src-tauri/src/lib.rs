@@ -12,13 +12,15 @@ mod transcription;
 use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
-use error_reporting::{ErrorReporter, ErrorReport, ErrorSeverity, ErrorCategory, ErrorStats};
-use license::{LicenseManager, LicenseStatus, LicenseInfo, get_device_id, get_device_label, clear_cache};
+use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
+use license::{
+    clear_cache, get_device_id, get_device_label, LicenseInfo, LicenseManager, LicenseStatus,
+};
+use log::{debug, error, info, warn};
 use post_process::PostProcessor;
-use log::{info, warn, debug, error};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -50,12 +52,12 @@ impl RateLimiter {
     pub fn check(&self, key: &str) -> bool {
         let mut requests = self.requests.lock().unwrap();
         let now = Instant::now();
-        
+
         let timestamps = requests.entry(key.to_string()).or_insert_with(Vec::new);
-        
+
         // Remove old timestamps outside the window
         timestamps.retain(|&t| now.duration_since(t) < self.window);
-        
+
         if timestamps.len() >= self.max_requests {
             warn!("Rate limit exceeded for action: {}", key);
             false
@@ -75,19 +77,25 @@ fn sanitize_path(path: &str) -> Result<String, String> {
         warn!("Path traversal attempt detected: {}", path);
         return Err("Invalid path: contains forbidden characters".to_string());
     }
-    
+
     // Normalize path separators
     let normalized = path.replace('\\', "/");
-    
+
     // Check for absolute paths outside expected directories
-    if normalized.starts_with('/') && !normalized.contains("/WaveType/") && !normalized.contains("/WaveType/") {
+    if normalized.starts_with('/')
+        && !normalized.contains("/WaveType/")
+        && !normalized.contains("/WaveType/")
+    {
         // Allow system temp directories and home directories
-        if !normalized.starts_with("/tmp/") && !normalized.starts_with("/home/") && !normalized.starts_with("/Users/") {
+        if !normalized.starts_with("/tmp/")
+            && !normalized.starts_with("/home/")
+            && !normalized.starts_with("/Users/")
+        {
             warn!("Access to restricted path attempted: {}", normalized);
             return Err("Invalid path: outside allowed directories".to_string());
         }
     }
-    
+
     Ok(normalized)
 }
 
@@ -95,13 +103,13 @@ fn sanitize_text(text: &str, max_len: usize) -> Result<String, String> {
     if text.len() > max_len {
         return Err(format!("Text exceeds maximum length of {} bytes", max_len));
     }
-    
+
     // Remove null bytes and other control characters that could cause issues
     let sanitized: String = text
         .chars()
         .filter(|c| !c.is_control() || *c == '\n' || *c == '\r' || *c == '\t')
         .collect();
-    
+
     Ok(sanitized)
 }
 
@@ -224,12 +232,14 @@ fn start_recording(
 ) -> CommandResult<()> {
     // Rate limiting check
     if !rate_limiter.0.check("start_recording") {
-        return Err(CommandError::Recording("Rate limit exceeded. Please wait before starting another recording.".to_string()));
+        return Err(CommandError::Recording(
+            "Rate limit exceeded. Please wait before starting another recording.".to_string(),
+        ));
     }
-    
+
     debug!("start_recording called");
     let mut recorder_guard = recorder.0.lock().unwrap();
-    
+
     if recorder_guard.is_none() {
         debug!("Creating new AudioRecorder");
         *recorder_guard = Some(AudioRecorder::new().map_err(|e| {
@@ -237,7 +247,7 @@ fn start_recording(
             CommandError::Recording(e)
         })?)
     }
-    
+
     if let Some(ref mut rec) = *recorder_guard {
         debug!("Starting recording...");
         rec.start_recording().map_err(|e| {
@@ -246,37 +256,42 @@ fn start_recording(
         })?;
         debug!("Recording started successfully");
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 fn stop_recording(recorder: State<RecorderState>) -> CommandResult<Vec<f32>> {
     let mut recorder_guard = recorder.0.lock().unwrap();
-    
+
     if let Some(ref mut rec) = *recorder_guard {
         let samples = rec.stop_recording().map_err(CommandError::Recording)?;
         Ok(samples)
     } else {
-        Err(CommandError::Recording("No recorder initialized".to_string()))
+        Err(CommandError::Recording(
+            "No recorder initialized".to_string(),
+        ))
     }
 }
 
 #[tauri::command]
 fn cancel_recording(recorder: State<RecorderState>) -> CommandResult<()> {
     let mut recorder_guard = recorder.0.lock().unwrap();
-    
+
     if let Some(ref mut rec) = *recorder_guard {
         rec.cancel_recording();
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 fn is_recording(recorder: State<RecorderState>) -> bool {
     let recorder_guard = recorder.0.lock().unwrap();
-    recorder_guard.as_ref().map(|r| r.is_recording()).unwrap_or(false)
+    recorder_guard
+        .as_ref()
+        .map(|r| r.is_recording())
+        .unwrap_or(false)
 }
 
 // ==================== Recording Overlay Commands ====================
@@ -284,47 +299,47 @@ fn is_recording(recorder: State<RecorderState>) -> bool {
 #[tauri::command]
 async fn show_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
     use tauri::Manager;
-    
+
     if let Some(overlay_window) = app.get_webview_window("recording-overlay") {
         // Show the overlay window
         overlay_window.show().map_err(|e| {
             error!("Failed to show overlay window: {}", e);
             CommandError::Recording(format!("Failed to show overlay: {}", e))
         })?;
-        
+
         // Set it to fullscreen and always on top
         overlay_window.set_fullscreen(true).map_err(|e| {
             warn!("Failed to set fullscreen: {}", e);
             CommandError::Recording(format!("Failed to set fullscreen: {}", e))
         })?;
-        
+
         overlay_window.set_always_on_top(true).map_err(|e| {
             warn!("Failed to set always on top: {}", e);
             CommandError::Recording(format!("Failed to set always on top: {}", e))
         })?;
-        
+
         debug!("Recording overlay shown");
     } else {
         warn!("Recording overlay window not found");
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 async fn hide_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
     use tauri::Manager;
-    
+
     if let Some(overlay_window) = app.get_webview_window("recording-overlay") {
         // Hide the overlay window
         overlay_window.hide().map_err(|e| {
             error!("Failed to hide overlay window: {}", e);
             CommandError::Recording(format!("Failed to hide overlay: {}", e))
         })?;
-        
+
         debug!("Recording overlay hidden");
     }
-    
+
     Ok(())
 }
 
@@ -338,14 +353,14 @@ fn load_model(
     language: String,
 ) -> CommandResult<()> {
     let model_path = downloader.0.get_model_path(&model_id);
-    
+
     if !model_path.exists() {
         return Err(CommandError::Transcription(format!(
             "Model {} is not downloaded",
             model_id
         )));
     }
-    
+
     // Drop existing model first to free memory before loading new one
     {
         let mut transcriber_guard = transcriber.0.lock().unwrap();
@@ -353,18 +368,16 @@ fn load_model(
         // Force memory release by dropping the guard
         drop(transcriber_guard);
     }
-    
+
     // Load new model
-    let new_transcriber = Transcriber::new(
-        model_path.to_str().unwrap(),
-        &language,
-    ).map_err(CommandError::Transcription)?;
-    
+    let new_transcriber = Transcriber::new(model_path.to_str().unwrap(), &language)
+        .map_err(CommandError::Transcription)?;
+
     let mut transcriber_guard = transcriber.0.lock().unwrap();
     *transcriber_guard = Some(new_transcriber);
-    
+
     info!("Model loaded: {} (language: {})", model_id, language);
-    
+
     Ok(())
 }
 
@@ -382,9 +395,11 @@ fn transcribe_audio(
     audio_samples: Vec<f32>,
 ) -> CommandResult<String> {
     let transcriber_guard = transcriber.0.lock().unwrap();
-    
+
     if let Some(ref t) = *transcriber_guard {
-        let text = t.transcribe(&audio_samples).map_err(CommandError::Transcription)?;
+        let text = t
+            .transcribe(&audio_samples)
+            .map_err(CommandError::Transcription)?;
         Ok(text)
     } else {
         Err(CommandError::Transcription("No model loaded".to_string()))
@@ -402,14 +417,18 @@ async fn record_and_transcribe(
         if let Some(ref mut rec) = *recorder_guard {
             rec.stop_recording().map_err(CommandError::Recording)?
         } else {
-            return Err(CommandError::Recording("No recorder initialized".to_string()));
+            return Err(CommandError::Recording(
+                "No recorder initialized".to_string(),
+            ));
         }
     };
-    
+
     // Transcribe
     let transcriber_guard = transcriber.0.lock().unwrap();
     if let Some(ref t) = *transcriber_guard {
-        let text = t.transcribe(&samples).map_err(CommandError::Transcription)?;
+        let text = t
+            .transcribe(&samples)
+            .map_err(CommandError::Transcription)?;
         Ok(text)
     } else {
         Err(CommandError::Transcription("No model loaded".to_string()))
@@ -423,50 +442,61 @@ async fn transcribe_file(
     file_path: String,
 ) -> CommandResult<String> {
     use std::path::Path;
-    
+
     // Rate limiting check
     if !rate_limiter.0.check("transcribe_file") {
-        return Err(CommandError::Transcription("Rate limit exceeded. Please wait before transcribing another file.".to_string()));
+        return Err(CommandError::Transcription(
+            "Rate limit exceeded. Please wait before transcribing another file.".to_string(),
+        ));
     }
-    
+
     // Sanitize and validate file path
-    let safe_path = sanitize_path(&file_path)
-        .map_err(|e| CommandError::Transcription(e))?;
-    
+    let safe_path = sanitize_path(&file_path).map_err(|e| CommandError::Transcription(e))?;
+
     let path = Path::new(&safe_path);
     if !path.exists() {
-        return Err(CommandError::Transcription(format!("File not found: {}", safe_path)));
+        return Err(CommandError::Transcription(format!(
+            "File not found: {}",
+            safe_path
+        )));
     }
-    
+
     // Validate file extension
-    let extension = path.extension()
+    let extension = path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase());
-    
+
     match extension.as_deref() {
-        Some("wav") | Some("mp3") | Some("m4a") | Some("ogg") | Some("flac") | Some("aac") | Some("webm") | Some("mkv") => {}
+        Some("wav") | Some("mp3") | Some("m4a") | Some("ogg") | Some("flac") | Some("aac")
+        | Some("webm") | Some("mkv") => {}
         _ => {
             return Err(CommandError::Transcription(
-                "Unsupported audio format. Please use WAV, MP3, M4A, OGG, FLAC, AAC, or WebM.".to_string()
+                "Unsupported audio format. Please use WAV, MP3, M4A, OGG, FLAC, AAC, or WebM."
+                    .to_string(),
             ));
         }
     }
-    
+
     // Check file size (max 500MB)
     let metadata = std::fs::metadata(&safe_path)
         .map_err(|e| CommandError::Transcription(format!("Cannot read file: {}", e)))?;
     if metadata.len() > 500 * 1024 * 1024 {
-        return Err(CommandError::Transcription("File too large. Maximum size is 500MB.".to_string()));
+        return Err(CommandError::Transcription(
+            "File too large. Maximum size is 500MB.".to_string(),
+        ));
     }
-    
+
     // Read audio file and convert to samples
     let samples = read_audio_file(&file_path)
         .map_err(|e| CommandError::Transcription(format!("Failed to read audio file: {}", e)))?;
-    
+
     // Transcribe
     let transcriber_guard = transcriber.0.lock().unwrap();
     if let Some(ref t) = *transcriber_guard {
-        let text = t.transcribe(&samples).map_err(CommandError::Transcription)?;
+        let text = t
+            .transcribe(&samples)
+            .map_err(CommandError::Transcription)?;
         Ok(text)
     } else {
         Err(CommandError::Transcription("No model loaded".to_string()))
@@ -474,83 +504,95 @@ async fn transcribe_file(
 }
 
 fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
+    use std::fs::File;
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
     use symphonia::core::formats::FormatOptions;
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
     use symphonia::core::probe::Hint;
-    use std::fs::File;
-    
+
     let file = File::open(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
-    
+
     // Create a media source stream
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
-    
+
     // Create a hint to help the format registry guess what format reader is appropriate
     let mut hint = Hint::new();
-    if let Some(ext) = std::path::Path::new(file_path).extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = std::path::Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+    {
         hint.with_extension(ext);
     }
-    
+
     // Probe the media source
     let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
         .map_err(|e| format!("Failed to probe audio format: {}", e))?;
-    
+
     let mut format = probed.format;
-    
+
     // Find the first audio track
-    let track = format.tracks()
+    let track = format
+        .tracks()
         .iter()
         .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
         .ok_or_else(|| "No audio track found".to_string())?;
-    
+
     let track_id = track.id;
     let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
     let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2);
-    
+
     // Create a decoder
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("Failed to create decoder: {}", e))?;
-    
+
     let mut all_samples: Vec<f32> = Vec::new();
-    
+
     // Decode all packets
     loop {
         let packet = match format.next_packet() {
             Ok(packet) => packet,
-            Err(symphonia::core::errors::Error::IoError(ref e)) 
-                if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(symphonia::core::errors::Error::IoError(ref e))
+                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                break
+            }
             Err(symphonia::core::errors::Error::ResetRequired) => {
                 decoder.reset();
                 continue;
             }
             Err(e) => return Err(format!("Failed to read packet: {}", e)),
         };
-        
+
         // Skip packets from other tracks
         if packet.track_id() != track_id {
             continue;
         }
-        
+
         // Decode the packet
         let decoded = match decoder.decode(&packet) {
             Ok(decoded) => decoded,
             Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
             Err(e) => return Err(format!("Failed to decode: {}", e)),
         };
-        
+
         // Convert to f32 samples
         let spec = *decoded.spec();
         let duration = decoded.capacity() as u64;
         let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
         sample_buf.copy_interleaved_ref(decoded);
-        
+
         all_samples.extend_from_slice(sample_buf.samples());
     }
-    
+
     // Convert to mono if needed
     let mono: Vec<f32> = if channels > 1 {
         all_samples
@@ -560,7 +602,7 @@ fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
     } else {
         all_samples
     };
-    
+
     // Resample to 16kHz if needed
     let target_rate = 16000u32;
     let resampled = if sample_rate != target_rate {
@@ -568,7 +610,7 @@ fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
     } else {
         mono
     };
-    
+
     Ok(resampled)
 }
 
@@ -607,20 +649,21 @@ async fn download_model(
 ) -> CommandResult<String> {
     let app_clone = app.clone();
     let model_id_clone = model_id.clone();
-    
-    let model_path = downloader.0
+
+    let model_path = downloader
+        .0
         .download_model(&model_id, move |progress: DownloadProgress| {
             // Emit progress event to frontend
             let _ = app_clone.emit("download-progress", progress);
         })
         .await
         .map_err(CommandError::Download)?;
-    
+
     // Update database
     let path_str = model_path.to_str().unwrap().to_string();
     db.0.set_model_downloaded(&model_id_clone, true, Some(&path_str))
         .map_err(CommandError::Database)?;
-    
+
     Ok(path_str)
 }
 
@@ -630,8 +673,13 @@ async fn delete_model(
     db: State<'_, DbState>,
     model_id: String,
 ) -> CommandResult<()> {
-    downloader.0.delete_model(&model_id).await.map_err(CommandError::Download)?;
-    db.0.set_model_downloaded(&model_id, false, None).map_err(CommandError::Database)?;
+    downloader
+        .0
+        .delete_model(&model_id)
+        .await
+        .map_err(CommandError::Download)?;
+    db.0.set_model_downloaded(&model_id, false, None)
+        .map_err(CommandError::Database)?;
     Ok(())
 }
 
@@ -647,23 +695,26 @@ fn get_downloaded_models(downloader: State<DownloaderState>) -> Vec<String> {
 
 #[tauri::command]
 fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> String {
-    downloader.0.get_model_path(&model_id).to_string_lossy().to_string()
+    downloader
+        .0
+        .get_model_path(&model_id)
+        .to_string_lossy()
+        .to_string()
 }
 
 // ==================== Post-Processing Commands ====================
 
 #[tauri::command]
 fn post_process_text(text: String) -> CommandResult<String> {
-    let sanitized = sanitize_text(&text, 100_000)
-        .map_err(|e| CommandError::PostProcessing(e))?;
-    
+    let sanitized = sanitize_text(&text, 100_000).map_err(|e| CommandError::PostProcessing(e))?;
+
     if sanitized.is_empty() {
         return Ok(String::new());
     }
-    
+
     let processor = PostProcessor::new();
     let processed = processor.process(&sanitized);
-    
+
     Ok(processed)
 }
 
@@ -672,13 +723,12 @@ fn post_process_text(text: String) -> CommandResult<String> {
 #[tauri::command]
 fn inject_text(text: String) -> CommandResult<()> {
     // Sanitize input - limit text length and remove control characters
-    let sanitized = sanitize_text(&text, 100_000)
-        .map_err(|e| CommandError::TextInjection(e))?;
-    
+    let sanitized = sanitize_text(&text, 100_000).map_err(|e| CommandError::TextInjection(e))?;
+
     if sanitized.is_empty() {
         return Err(CommandError::TextInjection("No text to inject".to_string()));
     }
-    
+
     text_inject::inject_text_once(&sanitized).map_err(CommandError::TextInjection)
 }
 
@@ -686,14 +736,35 @@ fn inject_text(text: String) -> CommandResult<()> {
 fn execute_keyboard_shortcut(shortcut: String) -> CommandResult<()> {
     // Validate shortcut against allowed values
     let allowed_shortcuts = [
-        "undo", "redo", "copy", "cut", "paste", "select_all", "backspace_word",
-        "backspace", "delete_word", "delete_line", "enter", "tab", "escape",
-        "left", "right", "up", "down", "home", "end", "word_left", "word_right"
+        "undo",
+        "redo",
+        "copy",
+        "cut",
+        "paste",
+        "select_all",
+        "backspace_word",
+        "backspace",
+        "delete_word",
+        "delete_line",
+        "enter",
+        "tab",
+        "escape",
+        "left",
+        "right",
+        "up",
+        "down",
+        "home",
+        "end",
+        "word_left",
+        "word_right",
     ];
     if !allowed_shortcuts.contains(&shortcut.as_str()) {
-        return Err(CommandError::TextInjection(format!("Invalid shortcut: {}", shortcut)));
+        return Err(CommandError::TextInjection(format!(
+            "Invalid shortcut: {}",
+            shortcut
+        )));
     }
-    
+
     text_inject::execute_shortcut(&shortcut).map_err(CommandError::TextInjection)
 }
 
@@ -710,30 +781,50 @@ fn add_transcription(
     // Sanitize and validate text input
     let sanitized_text = sanitize_text(&text, 1_000_000)
         .map_err(|e| CommandError::Database(rusqlite::Error::InvalidParameterName(e)))?;
-    
+
     if sanitized_text.is_empty() {
-        return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Text cannot be empty".to_string())));
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Text cannot be empty".to_string()),
+        ));
     }
-    
+
     // Validate model_id against allowed values
     const VALID_MODEL_IDS: &[&str] = &[
         // Whisper models
-        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
-        "tiny.en", "base.en", "small.en", "medium.en",
-        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
+        "tiny",
+        "base",
+        "small",
+        "medium",
+        "large",
+        "large-v3",
+        "large-v3-turbo",
+        "tiny.en",
+        "base.en",
+        "small.en",
+        "medium.en",
+        "distil-small.en",
+        "distil-medium.en",
+        "distil-large-v2",
+        "distil-large-v3",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
-        return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Invalid model ID".to_string())));
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
+        ));
     }
-    
+
     // Validate language against allowed values
     if !["en", "bn", "auto"].contains(&language.as_str()) {
-        return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Invalid language".to_string())));
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Invalid language".to_string()),
+        ));
     }
-    
+
     // Validate duration range (0 to 1 hour in milliseconds)
     if duration_ms < 0 || duration_ms > 3_600_000 {
-        return Err(CommandError::Database(rusqlite::Error::InvalidParameterName("Invalid duration".to_string())));
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Invalid duration".to_string()),
+        ));
     }
 
     db.0.add_transcription(&sanitized_text, &model_id, &language, duration_ms)
@@ -838,7 +929,7 @@ impl From<LicenseData> for LicenseResponse {
         } else {
             None
         };
-        
+
         Self {
             license_key: data.license_key,
             display_key: None,
@@ -855,19 +946,22 @@ impl From<LicenseData> for LicenseResponse {
             device_id: get_device_id(),
             device_label: get_device_label(),
             limit_activations: None,
-            usage: 0,
-            validations: 0,
+            usage: data.usage,
+            validations: data.validations,
         }
     }
 }
 
 #[tauri::command]
-fn get_license(db: State<DbState>, license_manager: State<LicenseManagerState>) -> CommandResult<LicenseResponse> {
+fn get_license(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
+) -> CommandResult<LicenseResponse> {
     // First try to get from secure cache
     if let Some(info) = license_manager.0.get_cached_info() {
         return Ok(LicenseResponse::from(info));
     }
-    
+
     // Fall back to database
     let license = db.0.get_license().map_err(CommandError::Database)?;
     Ok(LicenseResponse::from(license))
@@ -880,13 +974,14 @@ async fn activate_license(
     license_key: String,
 ) -> CommandResult<LicenseResponse> {
     info!("Activating license key...");
-    
+
     // Activate using the new LicenseManager
-    let license_info = license_manager.0
+    let license_info = license_manager
+        .0
         .activate(&license_key)
         .await
         .map_err(CommandError::License)?;
-    
+
     // Also save to database as backup
     let license_data = LicenseData {
         license_key: Some(license_key),
@@ -898,10 +993,13 @@ async fn activate_license(
         is_activated: true,
         last_validated_at: Some(chrono::Utc::now().to_rfc3339()),
         trial_started_at: None,
+        usage: license_info.usage,
+        validations: license_info.validations,
     };
-    
-    db.0.save_license(&license_data).map_err(CommandError::Database)?;
-    
+
+    db.0.save_license(&license_data)
+        .map_err(CommandError::Database)?;
+
     info!("License activated successfully!");
     Ok(LicenseResponse::from(license_info))
 }
@@ -912,13 +1010,14 @@ async fn validate_license(
     license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<LicenseResponse> {
     info!("Validating license...");
-    
+
     // Validate using the new LicenseManager
-    let license_info = license_manager.0
+    let license_info = license_manager
+        .0
         .validate()
         .await
         .map_err(CommandError::License)?;
-    
+
     // Update database
     let license_data = LicenseData {
         license_key: Some(license_info.license_key.clone()),
@@ -936,10 +1035,12 @@ async fn validate_license(
         is_activated: license_info.status.allows_usage(),
         last_validated_at: license_info.last_validated_at.clone(),
         trial_started_at: None,
+        usage: license_info.usage,
+        validations: license_info.validations,
     };
-    
+
     let _ = db.0.save_license(&license_data);
-    
+
     info!("License validated: {:?}", license_info.status);
     Ok(LicenseResponse::from(license_info))
 }
@@ -950,16 +1051,17 @@ async fn deactivate_license(
     license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<()> {
     info!("Deactivating license...");
-    
+
     // Deactivate using the new LicenseManager
-    license_manager.0
+    license_manager
+        .0
         .deactivate()
         .await
         .map_err(CommandError::License)?;
-    
+
     // Clear database
     db.0.clear_license().map_err(CommandError::Database)?;
-    
+
     info!("License deactivated successfully");
     Ok(())
 }
@@ -976,7 +1078,7 @@ fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerSta
     if license_manager.0.is_valid() {
         return true;
     }
-    
+
     // Fall back to database for trial check
     if let Ok(license) = db.0.get_license() {
         // Check trial status
@@ -984,25 +1086,28 @@ fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerSta
             if let Some(trial_started) = &license.trial_started_at {
                 if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
                     let now = chrono::Utc::now();
-                    let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+                    let days_since_start =
+                        (now - start_date.with_timezone(&chrono::Utc)).num_days();
                     return days_since_start < 7;
                 }
             }
         }
     }
-    
+
     false
 }
 
 #[tauri::command]
 fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
     let mut license = db.0.get_license().map_err(CommandError::Database)?;
-    
+
     // Check if already has active license
     if license.is_activated && license.status == "active" {
-        return Err(CommandError::License("Already have an active license".to_string()));
+        return Err(CommandError::License(
+            "Already have an active license".to_string(),
+        ));
     }
-    
+
     // Check if trial already started
     if license.trial_started_at.is_some() {
         // Check if trial is still valid
@@ -1012,22 +1117,26 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
                 let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
                 if days_since_start >= 7 {
                     license.status = "trial_expired".to_string();
-                    db.0.save_license(&license).map_err(CommandError::Database)?;
-                    return Err(CommandError::License("Trial has expired. Please purchase a license.".to_string()));
+                    db.0.save_license(&license)
+                        .map_err(CommandError::Database)?;
+                    return Err(CommandError::License(
+                        "Trial has expired. Please purchase a license.".to_string(),
+                    ));
                 }
             }
         }
         // Trial already active
         return Ok(LicenseResponse::from(license));
     }
-    
+
     // Start new trial
     license.status = "trial".to_string();
     license.trial_started_at = Some(chrono::Utc::now().to_rfc3339());
     license.is_activated = false;
-    
-    db.0.save_license(&license).map_err(CommandError::Database)?;
-    
+
+    db.0.save_license(&license)
+        .map_err(CommandError::Database)?;
+
     info!("Trial started");
     Ok(LicenseResponse::from(license))
 }
@@ -1046,7 +1155,7 @@ fn get_device_info() -> serde_json::Value {
 #[tauri::command]
 fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
     let license = db.0.get_license().map_err(CommandError::Database)?;
-    
+
     // Check for active license first
     if license.is_activated && license.status == "active" {
         return Ok(serde_json::json!({
@@ -1056,14 +1165,14 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
             "hasLicense": true
         }));
     }
-    
+
     // Check trial status
     if let Some(trial_started) = &license.trial_started_at {
         if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
             let now = chrono::Utc::now();
             let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
             let days_remaining = (7 - days_since_start).max(0);
-            
+
             return Ok(serde_json::json!({
                 "isInTrial": days_remaining > 0,
                 "daysRemaining": days_remaining,
@@ -1072,7 +1181,7 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
             }));
         }
     }
-    
+
     // No trial started
     Ok(serde_json::json!({
         "isInTrial": false,
@@ -1085,7 +1194,7 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
 #[tauri::command]
 fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
     let license = db.0.get_license().map_err(CommandError::Database)?;
-    
+
     // Check for active license
     if license.is_activated && license.status == "active" {
         return Ok(serde_json::json!({
@@ -1094,14 +1203,14 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
             "daysRemaining": null
         }));
     }
-    
+
     // Check trial status
     if let Some(trial_started) = &license.trial_started_at {
         if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
             let now = chrono::Utc::now();
             let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
             let days_remaining = (7 - days_since_start).max(0);
-            
+
             if days_remaining > 0 {
                 return Ok(serde_json::json!({
                     "canUse": true,
@@ -1117,7 +1226,7 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
             }
         }
     }
-    
+
     // No license and no trial
     Ok(serde_json::json!({
         "canUse": false,
@@ -1130,19 +1239,17 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
 
 #[tauri::command]
 fn get_app_data_dir(app: tauri::AppHandle) -> CommandResult<String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e: tauri::Error| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))?;
+    let path = app.path().app_data_dir().map_err(|e: tauri::Error| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string())
+    })?;
     Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 fn get_models_dir(app: tauri::AppHandle) -> CommandResult<String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e: tauri::Error| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))?;
+    let path = app.path().app_data_dir().map_err(|e: tauri::Error| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string())
+    })?;
     Ok(path.join("models").to_string_lossy().to_string())
 }
 
@@ -1152,33 +1259,35 @@ fn get_models_dir(app: tauri::AppHandle) -> CommandResult<String> {
 fn register_hotkey(app: tauri::AppHandle, hotkey: String) -> CommandResult<()> {
     let shortcut = parse_hotkey(&hotkey)
         .map_err(|e| CommandError::Recording(format!("Invalid hotkey: {}", e)))?;
-    
+
     println!("Registering hotkey: {} -> {:?}", hotkey, shortcut);
-    
+
     // Unregister all existing shortcuts first
     if let Err(e) = app.global_shortcut().unregister_all() {
         println!("Warning: Failed to unregister existing shortcuts: {}", e);
     }
-    
+
     // Register the new shortcut with handler
-    let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
-        println!("Shortcut event: {:?}", event.state());
-        match event.state() {
-            ShortcutState::Pressed => {
-                println!("Emitting hotkey-pressed");
-                if let Err(e) = app.emit("hotkey-pressed", ()) {
-                    println!("Failed to emit hotkey-pressed: {}", e);
+    let result = app
+        .global_shortcut()
+        .on_shortcut(shortcut, move |app, _shortcut, event| {
+            println!("Shortcut event: {:?}", event.state());
+            match event.state() {
+                ShortcutState::Pressed => {
+                    println!("Emitting hotkey-pressed");
+                    if let Err(e) = app.emit("hotkey-pressed", ()) {
+                        println!("Failed to emit hotkey-pressed: {}", e);
+                    }
+                }
+                ShortcutState::Released => {
+                    println!("Emitting hotkey-released");
+                    if let Err(e) = app.emit("hotkey-released", ()) {
+                        println!("Failed to emit hotkey-released: {}", e);
+                    }
                 }
             }
-            ShortcutState::Released => {
-                println!("Emitting hotkey-released");
-                if let Err(e) = app.emit("hotkey-released", ()) {
-                    println!("Failed to emit hotkey-released: {}", e);
-                }
-            }
-        }
-    });
-    
+        });
+
     match result {
         Ok(_) => {
             println!("Hotkey registered successfully");
@@ -1186,7 +1295,10 @@ fn register_hotkey(app: tauri::AppHandle, hotkey: String) -> CommandResult<()> {
         }
         Err(e) => {
             println!("Failed to register hotkey: {}", e);
-            Err(CommandError::Recording(format!("Failed to register hotkey: {}", e)))
+            Err(CommandError::Recording(format!(
+                "Failed to register hotkey: {}",
+                e
+            )))
         }
     }
 }
@@ -1201,14 +1313,14 @@ fn unregister_hotkeys(app: tauri::AppHandle) -> CommandResult<()> {
 
 fn parse_hotkey(hotkey: &str) -> Result<Shortcut, String> {
     let parts: Vec<&str> = hotkey.split('+').map(|s| s.trim()).collect();
-    
+
     if parts.is_empty() {
         return Err("Empty hotkey".to_string());
     }
-    
+
     let mut modifiers = Modifiers::empty();
     let mut key_code: Option<Code> = None;
-    
+
     for part in parts {
         match part.to_lowercase().as_str() {
             "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
@@ -1278,9 +1390,9 @@ fn parse_hotkey(hotkey: &str) -> Result<Shortcut, String> {
             _ => return Err(format!("Unknown key or modifier: {}", part)),
         }
     }
-    
+
     let code = key_code.ok_or("No key specified in hotkey")?;
-    
+
     Ok(Shortcut::new(Some(modifiers), code))
 }
 
@@ -1316,7 +1428,7 @@ async fn report_error(
         "fatal" => ErrorSeverity::Fatal,
         _ => ErrorSeverity::Error,
     };
-    
+
     let category = match category.to_lowercase().as_str() {
         "transcription" => ErrorCategory::Transcription,
         "audio" => ErrorCategory::Audio,
@@ -1330,32 +1442,32 @@ async fn report_error(
         "configuration" => ErrorCategory::Configuration,
         _ => ErrorCategory::Unknown,
     };
-    
+
     if let Some(reporter) = ErrorReporter::global() {
         let mut report = ErrorReport::new(severity, category, message);
-        
+
         if let Some(trace) = stack_trace {
             report = report.with_details(trace);
         }
-        
+
         if let Some(action) = user_action {
             report = report.with_context("user_action", action);
         }
-        
+
         if let Some(ctx) = context {
             for (key, value) in ctx {
                 report = report.with_context(key, value);
             }
         }
-        
+
         reporter.report(report);
-        
+
         // Persist to disk periodically
         if let Some(app_data_dir) = app.path().app_data_dir().ok() {
             let _ = reporter.persist_to_file(&app_data_dir);
         }
     }
-    
+
     Ok(())
 }
 
@@ -1387,7 +1499,7 @@ async fn export_error_reports(
     format: Option<String>,
 ) -> Result<String, CommandError> {
     let format_str = format.unwrap_or_else(|| "json".to_string());
-    
+
     let content = if let Some(reporter) = ErrorReporter::global() {
         match format_str.to_lowercase().as_str() {
             "markdown" | "md" => reporter.export_to_markdown(),
@@ -1396,22 +1508,26 @@ async fn export_error_reports(
     } else {
         "{}".to_string()
     };
-    
+
     // Also save to file
     if let Some(app_data_dir) = app.path().app_data_dir().ok() {
         let reports_dir = app_data_dir.join("reports");
         std::fs::create_dir_all(&reports_dir).ok();
-        
+
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let extension = if format_str == "markdown" || format_str == "md" { "md" } else { "json" };
+        let extension = if format_str == "markdown" || format_str == "md" {
+            "md"
+        } else {
+            "json"
+        };
         let filename = format!("error_report_{}.{}", timestamp, extension);
         let filepath = reports_dir.join(&filename);
-        
+
         std::fs::write(&filepath, &content)?;
-        
+
         info!("Error report exported to: {:?}", filepath);
     }
-    
+
     Ok(content)
 }
 
@@ -1448,9 +1564,9 @@ pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_millis()
         .init();
-    
+
     info!("Starting {} v{}", APP_NAME, APP_VERSION);
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -1469,59 +1585,60 @@ pub fn run() {
         ))
         .setup(|app| {
             info!("Initializing application...");
-            
+
             // Initialize database
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("Failed to get app data directory");
-            
+
             info!("App data directory: {:?}", app_data_dir);
-            
+
             // Initialize error reporter early for crash handling
             let error_log_dir = app_data_dir.join("logs");
             ErrorReporter::init(error_log_dir);
-            
+
             let db = Database::new(app_data_dir.clone()).expect("Failed to initialize database");
             app.manage(DbState(Arc::new(db)));
-            
+
             // Initialize recorder state
             app.manage(RecorderState(Arc::new(Mutex::new(None))));
-            
+
             // Initialize transcriber state
             app.manage(TranscriberState(Arc::new(Mutex::new(None))));
-            
+
             // Initialize downloader
             let models_dir = app_data_dir.join("models");
             app.manage(DownloaderState(Arc::new(ModelDownloader::new(models_dir))));
-            
+
             // Initialize license manager
             app.manage(LicenseManagerState(Arc::new(LicenseManager::new())));
-            
+
             // Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
-            
+
             // Setup system tray
             setup_tray(app)?;
-            
+
             info!("Application initialized successfully");
-            
+
             // Note: Hotkey is registered from the frontend via register_hotkey command
             // This allows the frontend to control which hotkey is used based on settings
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
             // Handle window close - minimize to tray or actually close based on setting
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Get the minimize_to_tray setting from database
-                let should_minimize = window.app_handle()
+                let should_minimize = window
+                    .app_handle()
                     .try_state::<DbState>()
                     .and_then(|db| db.0.get_settings().ok())
                     .map(|settings| settings.minimize_to_tray)
                     .unwrap_or(true); // Default to minimize if can't read setting
-                
+
                 if should_minimize {
                     debug!("Window close requested, hiding to tray");
                     let _ = window.hide();
@@ -1613,11 +1730,18 @@ pub fn run() {
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Create tray menu items
     let show_item = MenuItem::with_id(app, "show", "Show WaveType", true, None::<&str>)?;
-    let start_recording_item = MenuItem::with_id(app, "start_recording", "Start Recording", true, None::<&str>)?;
-    let stop_recording_item = MenuItem::with_id(app, "stop_recording", "Stop Recording", true, None::<&str>)?;
+    let start_recording_item = MenuItem::with_id(
+        app,
+        "start_recording",
+        "Start Recording",
+        true,
+        None::<&str>,
+    )?;
+    let stop_recording_item =
+        MenuItem::with_id(app, "stop_recording", "Stop Recording", true, None::<&str>)?;
     let separator = MenuItem::with_id(app, "sep", "────────────", false, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    
+
     // Build menu
     let menu = Menu::with_items(
         app,
@@ -1630,34 +1754,35 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             &quit_item,
         ],
     )?;
-    
+
     // Get the icon - use default window icon as fallback
-    let icon = app.default_window_icon().cloned().ok_or("No default icon")?;
-    
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("No default icon")?;
+
     // Build tray icon
     let _tray = TrayIconBuilder::new()
         .icon(icon)
         .menu(&menu)
         .tooltip("WaveType - Voice to Text")
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "show" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
-                "start_recording" => {
-                    let _ = app.emit("tray-start-recording", ());
-                }
-                "stop_recording" => {
-                    let _ = app.emit("tray-stop-recording", ());
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "start_recording" => {
+                let _ = app.emit("tray-start-recording", ());
+            }
+            "stop_recording" => {
+                let _ = app.emit("tray-stop-recording", ());
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -1674,6 +1799,6 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .build(app)?;
-    
+
     Ok(())
 }
