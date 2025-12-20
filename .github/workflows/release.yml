@@ -77,7 +77,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name: Build Tauri App
+      # If an Apple certificate is configured in secrets, run the tauri-action
+      - name: Build & Package (signed)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,6 +95,25 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+      # Fallback: if no Apple signing certificate is available, build release artifacts
+      # without macOS codesigning/bundling so CI can still produce binaries.
+      - name: Build Release (unsigned fallback)
+        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        run: |
+          echo "No APPLE_CERTIFICATE found in secrets — building unsigned release artifacts"
+          pnpm build
+          # Build the Rust backend for the requested target if provided
+          if [ -n "${{ matrix.args }}" ]; then
+            rustup target add ${{ matrix.args }} || true
+            cd src-tauri
+            cargo build --release --target ${{ matrix.args }}
+            cd ..
+          else
+            cd src-tauri
+            cargo build --release || true
+            cd ..
+          fi
 
   publish-release:
     runs-on: ubuntu-latest
