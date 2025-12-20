@@ -79,6 +79,7 @@ jobs:
 
       - name: Check for Apple Certificate
         id: check_cert
+        shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         run: |
