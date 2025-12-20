@@ -79,7 +79,7 @@ jobs:
 
       # If an Apple certificate is configured in secrets, run the tauri-action
       - name: Build & Package (signed)
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: secrets.APPLE_CERTIFICATE != ''
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
       # Fallback: if no Apple signing certificate is available, build release artifacts
       # without macOS codesigning/bundling so CI can still produce binaries.
       - name: Build Release (unsigned fallback)
-        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        if: secrets.APPLE_CERTIFICATE == ''
         run: |
           echo "No APPLE_CERTIFICATE found in secrets — building unsigned release artifacts"
           pnpm build
