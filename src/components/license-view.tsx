@@ -56,8 +56,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const { success: toastSuccess, error: toastError, info: toastInfo } =
-    useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   // Helper to extract useful messages from various error shapes returned by Tauri
   const extractErrorMessage = (err: any): string => {
@@ -368,14 +367,6 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                       {license.limit_activations
                         ? ` / ${license.limit_activations}`
                         : ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                    <span className="text-xs text-foreground/60">
-                      Validations
-                    </span>
-                    <span className="text-sm text-foreground/80">
-                      {license.validations}
                     </span>
                   </div>
                 </div>
