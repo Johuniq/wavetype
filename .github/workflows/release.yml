@@ -1,4 +1,5 @@
 name: Release
+name: Release
 
 on:
   push:
@@ -111,7 +112,8 @@ jobs:
       # Fallback: if no Apple signing certificate is available, build release artifacts
       # without macOS codesigning/bundling so CI can still produce binaries.
       - name: Build Release (unsigned fallback)
-        if: steps.check_cert.outputs.has_cert == 'false'
+        if: ${{ matrix.platform == 'macos-latest' && steps.check_cert.outputs.has_cert == 'false' }}
+        shell: bash
         run: |
           echo "No APPLE_CERTIFICATE found in secrets — building unsigned release artifacts"
           pnpm build
