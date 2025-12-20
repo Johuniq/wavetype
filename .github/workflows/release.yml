@@ -77,59 +77,15 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name: Check for Apple Certificate
-        id: check_cert
-        shell: bash
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-        run: |
-          if [ -n "$APPLE_CERTIFICATE" ]; then
-            echo "has_cert=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_cert=false" >> $GITHUB_OUTPUT
-          fi
-
-      # If an Apple certificate is configured in secrets, run the tauri-action
-      - name: Build & Package (signed)
-        if: steps.check_cert.outputs.has_cert == 'true'
+      - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS Code Signing & Notarization Secrets
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
-
-      # Fallback: if no Apple signing certificate is available, build release artifacts
-      # without macOS codesigning/bundling so CI can still produce binaries.
-      - name: Build Release (unsigned fallback)
-        if: steps.check_cert.outputs.has_cert == 'false'
-        shell: bash
-        env:
-          MATRIX_ARGS: ${{ matrix.args }}
-        run: |
-          echo "No APPLE_CERTIFICATE found in secrets — building unsigned release artifacts"
-          pnpm build
-          # Build the Rust backend for the requested target if provided
-          if [[ -n "$MATRIX_ARGS" ]]; then
-            target_arch=$(echo "$MATRIX_ARGS" | sed 's/--target //')
-            rustup target add "$target_arch" || true
-            cd src-tauri
-            cargo build --release $MATRIX_ARGS
-            cd ..
-          else
-            cd src-tauri
-            cargo build --release || true
-            cd ..
-          fi
 
   publish-release:
     runs-on: ubuntu-latest
