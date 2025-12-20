@@ -112,14 +112,18 @@ jobs:
       # without macOS codesigning/bundling so CI can still produce binaries.
       - name: Build Release (unsigned fallback)
         if: steps.check_cert.outputs.has_cert == 'false'
+        shell: bash
+        env:
+          MATRIX_ARGS: ${{ matrix.args }}
         run: |
           echo "No APPLE_CERTIFICATE found in secrets — building unsigned release artifacts"
           pnpm build
           # Build the Rust backend for the requested target if provided
-          if [ -n "${{ matrix.args }}" ]; then
-            rustup target add ${{ matrix.args }} || true
+          if [[ -n "$MATRIX_ARGS" ]]; then
+            target_arch=$(echo "$MATRIX_ARGS" | sed 's/--target //')
+            rustup target add "$target_arch" || true
             cd src-tauri
-            cargo build --release --target ${{ matrix.args }}
+            cargo build --release $MATRIX_ARGS
             cd ..
           else
             cd src-tauri
