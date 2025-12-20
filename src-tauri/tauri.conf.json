@@ -82,7 +82,7 @@
       }
     },
     "macOS": {
-      "entitlements": null,
+      "entitlements": "WaveType.entitlements",
       "minimumSystemVersion": "10.15",
       "frameworks": [],
       "signingIdentity": null,

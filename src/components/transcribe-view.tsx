@@ -127,10 +127,10 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
       <div className="glass-mesh-bg" />
 
       {/* Glass Header */}
-      <div className="liquid-glass border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+      <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={onClose}
-          className="glass-icon-button p-2 rounded-xl transition-all hover:scale-105 active:scale-95"
+          className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
         >
           <ArrowLeft className="h-4 w-4 text-foreground/70" />
         </button>
