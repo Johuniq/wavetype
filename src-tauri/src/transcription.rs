@@ -88,20 +88,26 @@ impl Transcriber {
             .full(params, audio_samples)
             .map_err(|e| format!("Transcription failed: {}", e))?;
 
-        // Collect all segments
+        // Collect all segments efficiently
         let num_segments = state
             .full_n_segments()
             .map_err(|e| format!("Failed to get segments: {}", e))?;
 
-        let mut result = String::new();
+        // Pre-allocate string capacity for typical transcription length
+        // Average word is ~5 chars, so 128 chars is a reasonable estimate
+        let mut result = String::with_capacity((num_segments as usize).saturating_mul(128));
         for i in 0..num_segments {
             if let Ok(segment) = state.full_get_segment_text(i) {
-                result.push_str(&segment);
-                result.push(' ');
+                if !segment.trim().is_empty() {
+                    if !result.is_empty() {
+                        result.push(' ');
+                    }
+                    result.push_str(&segment);
+                }
             }
         }
 
-        Ok(result.trim().to_string())
+        Ok(result)
     }
 
     pub fn set_language(&mut self, language: &str) {

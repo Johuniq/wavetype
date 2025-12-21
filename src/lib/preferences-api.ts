@@ -7,6 +7,8 @@ import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 
 /**
  * Enable or disable autostart on boot
+ * Note: Launch args (--minimized) are configured in the Rust backend
+ * during plugin initialization (see src-tauri/src/lib.rs)
  */
 export async function setAutoStart(enabled: boolean): Promise<void> {
   try {
@@ -14,6 +16,14 @@ export async function setAutoStart(enabled: boolean): Promise<void> {
       await enable();
     } else {
       await disable();
+    }
+
+    // Verify the change took effect
+    const now = await isEnabled();
+    if (now !== enabled) {
+      console.warn(
+        `Autostart toggle did not match expected state (expected=${enabled}, got=${now})`
+      );
     }
   } catch (error) {
     console.error("Failed to set autostart:", error);
@@ -23,6 +33,8 @@ export async function setAutoStart(enabled: boolean): Promise<void> {
 
 /**
  * Check if autostart is enabled
+ * Note: Launch args (--minimized) are configured in the Rust backend
+ * during plugin initialization (see src-tauri/src/lib.rs)
  */
 export async function getAutoStartEnabled(): Promise<boolean> {
   try {

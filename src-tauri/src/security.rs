@@ -52,6 +52,7 @@ pub fn decrypt_data(data: &[u8], key_bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// Mask a license key for safe logging/display
+#[allow(dead_code)]
 pub fn mask_license_key(key: &str) -> String {
     if key.len() <= 8 {
         return "****".to_string();

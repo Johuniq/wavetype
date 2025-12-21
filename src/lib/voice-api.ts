@@ -92,7 +92,12 @@ export async function deleteModel(modelId: string): Promise<void> {
 }
 
 export async function isModelDownloaded(modelId: string): Promise<boolean> {
-  return await invoke<boolean>("is_model_downloaded", { modelId });
+  try {
+    return await invoke<boolean>("is_model_downloaded", { modelId });
+  } catch (error) {
+    console.error("Error checking if model is downloaded:", error);
+    return false;
+  }
 }
 
 export async function getDownloadedModels(): Promise<string[]> {
@@ -100,7 +105,12 @@ export async function getDownloadedModels(): Promise<string[]> {
 }
 
 export async function getModelPath(modelId: string): Promise<string> {
-  return await invoke<string>("get_model_path", { modelId });
+  try {
+    return await invoke<string>("get_model_path", { modelId });
+  } catch (error) {
+    console.error("Error getting model path:", error);
+    throw error;
+  }
 }
 
 export async function getModelsDir(): Promise<string> {

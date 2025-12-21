@@ -80,8 +80,8 @@ impl AudioRecorder {
             let _ = handle.join();
         }
 
-        // Minimal delay to ensure all samples are collected
-        thread::sleep(std::time::Duration::from_millis(20));
+        // Minimal delay to ensure all samples are collected (reduced from 20ms for speed)
+        thread::sleep(std::time::Duration::from_millis(5));
 
         let samples = self.samples.lock().unwrap().clone();
 

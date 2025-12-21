@@ -19,8 +19,8 @@ impl TextInjector {
             return Ok(());
         }
 
-        // Minimal delay to ensure focus is on the target window
-        thread::sleep(Duration::from_millis(30));
+        // No delay needed - focus is already on target window when hotkey is pressed
+        // This eliminates unnecessary wait time for maximum speed
 
         // Type the text
         self.enigo
@@ -32,8 +32,8 @@ impl TextInjector {
 
     /// Execute a keyboard shortcut
     pub fn execute_shortcut(&mut self, shortcut: &str) -> Result<(), String> {
-        // Small delay to ensure focus
-        thread::sleep(Duration::from_millis(50));
+        // Minimal delay to ensure focus (reduced from 50ms for speed)
+        thread::sleep(Duration::from_millis(10));
 
         match shortcut {
             "undo" => {
@@ -154,12 +154,12 @@ impl TextInjector {
                 {
                     // Go to start of line
                     self.enigo.key(Key::Home, Direction::Click).ok();
-                    thread::sleep(Duration::from_millis(10));
+                    thread::sleep(Duration::from_millis(5));
                     // Select to end
                     self.enigo.key(Key::Shift, Direction::Press).ok();
                     self.enigo.key(Key::End, Direction::Click).ok();
                     self.enigo.key(Key::Shift, Direction::Release).ok();
-                    thread::sleep(Duration::from_millis(10));
+                    thread::sleep(Duration::from_millis(5));
                     // Delete
                     self.enigo.key(Key::Backspace, Direction::Click).ok();
                 }
@@ -224,20 +224,21 @@ impl TextInjector {
             }
         }
 
-        // Small delay after shortcut
-        thread::sleep(Duration::from_millis(30));
+        // No delay needed after shortcut - execution is immediate
 
         Ok(())
     }
 }
 
-// Helper function for one-off text injection
+// These functions are deprecated - use the state-managed TextInjector instead
+// (kept for backwards compatibility but not used in the new optimized path)
+#[allow(dead_code)]
 pub fn inject_text_once(text: &str) -> Result<(), String> {
     let mut injector = TextInjector::new()?;
     injector.inject_text(text)
 }
 
-/// Execute a keyboard shortcut
+#[allow(dead_code)]
 pub fn execute_shortcut(shortcut: &str) -> Result<(), String> {
     let mut injector = TextInjector::new()?;
     injector.execute_shortcut(shortcut)

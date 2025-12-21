@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::security;
+
 // =============================================================================
 // Configuration Constants
 // =============================================================================
@@ -397,26 +399,18 @@ fn calculate_integrity_hash(cache: &CachedLicense) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Encrypt data using device-bound key
-fn encrypt_data(data: &[u8]) -> Vec<u8> {
-    let key = derive_encryption_key();
-    data.iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect()
+/// Encrypt data using device-bound key with AES-256-GCM
+fn encrypt_data(data: &[u8]) -> Result<Vec<u8>, String> {
+    let device_id = get_device_id();
+    let key = security::derive_encryption_key(&device_id);
+    security::encrypt_data(data, &key)
 }
 
-/// Decrypt data using device-bound key
-fn decrypt_data(data: &[u8]) -> Vec<u8> {
-    encrypt_data(data) // XOR is symmetric
-}
-
-/// Derive encryption key from device ID
-fn derive_encryption_key() -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(get_device_id().as_bytes());
-    hasher.update(b"wavetype-encryption-key-v2");
-    hasher.finalize().to_vec()
+/// Decrypt data using device-bound key with AES-256-GCM
+fn decrypt_data(data: &[u8]) -> Result<Vec<u8>, String> {
+    let device_id = get_device_id();
+    let key = security::derive_encryption_key(&device_id);
+    security::decrypt_data(data, &key)
 }
 
 /// Store license cache securely
@@ -436,7 +430,8 @@ pub fn store_cache(cache: &CachedLicense) -> Result<(), String> {
     let json = serde_json::to_string(&cache_with_hash)
         .map_err(|e| format!("Failed to serialize cache: {}", e))?;
 
-    let encrypted = encrypt_data(json.as_bytes());
+    let encrypted = encrypt_data(json.as_bytes())
+        .map_err(|e| format!("Failed to encrypt cache: {}", e))?;
 
     std::fs::write(&cache_path, encrypted).map_err(|e| format!("Failed to write cache: {}", e))?;
 
@@ -449,7 +444,7 @@ pub fn load_cache() -> Option<CachedLicense> {
     let cache_path = get_cache_path()?;
 
     let encrypted = std::fs::read(&cache_path).ok()?;
-    let decrypted = decrypt_data(&encrypted);
+    let decrypted = decrypt_data(&encrypted).ok()?;
     let json = String::from_utf8(decrypted).ok()?;
     let cache: CachedLicense = serde_json::from_str(&json).ok()?;
 

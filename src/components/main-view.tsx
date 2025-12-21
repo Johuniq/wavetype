@@ -3,39 +3,39 @@ import { useToast } from "@/hooks/use-toast";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
-  addTranscription,
-  hideRecordingOverlay,
-  loadModel,
-  onHotkeyPressed,
-  onHotkeyReleased,
-  onTrayStartRecording,
-  onTrayStopRecording,
-  registerHotkey,
-  showRecordingOverlay,
-  startRecording,
-  stopTranscribeAndInject,
-  unregisterHotkeys,
+    addTranscription,
+    hideRecordingOverlay,
+    loadModel,
+    onHotkeyPressed,
+    onHotkeyReleased,
+    onTrayStartRecording,
+    onTrayStopRecording,
+    registerHotkey,
+    showRecordingOverlay,
+    startRecording,
+    stopTranscribeAndInject,
+    unregisterHotkeys,
 } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import type { RecordingStatus } from "@/types";
 import {
-  AlertCircle,
-  Clock,
-  FileAudio,
-  History,
-  Key,
-  Loader2,
-  Mic,
-  Settings,
+    AlertCircle,
+    Clock,
+    FileAudio,
+    History,
+    Key,
+    Loader2,
+    Mic,
+    Settings,
 } from "lucide-react";
 import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    lazy,
+    Suspense,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 
 // Lazy load heavy views to reduce initial bundle and memory
@@ -207,30 +207,34 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         currentSettings.clipboardMode
       );
       const durationMs = Date.now() - startTime;
-      if (text) {
-        setLastTranscription(text);
-        // Save to history
-        try {
-          const insertedId = await addTranscription(
-            text,
-            selectedModel?.id || "base",
-            currentSettings.language,
-            durationMs
-          );
-          console.log("Saved transcription id:", insertedId);
-          const actionText = currentSettings.clipboardMode
-            ? "Copied to clipboard"
-            : "Saved transcription";
-          toastSuccess(actionText, `ID: ${insertedId}`);
-        } catch (historyError: any) {
-          console.error("Failed to save to history:", historyError);
-          const msg =
-            historyError?.toString?.() || "Unknown error saving transcription";
-          toastError("Failed to save transcription", msg);
-        }
-      }
+      
+      // Update UI immediately
       recordingStatusRef.current = "idle";
       setRecordingStatus("idle");
+      
+      if (text) {
+        setLastTranscription(text);
+        const actionText = currentSettings.clipboardMode
+          ? "Copied to clipboard"
+          : "Transcribed and injected";
+        toastSuccess(actionText);
+        
+        // Save to history in background (non-blocking)
+        // Don't await - let it happen asynchronously so it doesn't slow down the response
+        addTranscription(
+          text,
+          selectedModel?.id || "base",
+          currentSettings.language,
+          durationMs
+        )
+          .then((insertedId) => {
+            console.log("Saved transcription id:", insertedId);
+          })
+          .catch((historyError: any) => {
+            console.error("Failed to save to history:", historyError);
+            // Don't show error toast for background history saving failures
+          });
+      }
     } catch (error) {
       console.error("Transcription failed:", error);
       setErrorMessage("Transcription failed");

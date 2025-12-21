@@ -6,6 +6,7 @@ mod downloader;
 mod error_reporting;
 mod license;
 mod post_process;
+mod security;
 mod text_inject;
 mod transcription;
 
@@ -82,16 +83,31 @@ fn sanitize_path(path: &str) -> Result<String, String> {
     let normalized = path.replace('\\', "/");
 
     // Check for absolute paths outside expected directories
-    if normalized.starts_with('/')
-        && !normalized.contains("/WaveType/")
-        && !normalized.contains("/WaveType/")
-    {
-        // Allow system temp directories and home directories
-        if !normalized.starts_with("/tmp/")
+    // Handle Unix-like paths (starting with /)
+    if normalized.starts_with('/') {
+        // Allow paths within WaveType app directories, temp, home, or Users
+        if !normalized.contains("/WaveType/")
+            && !normalized.starts_with("/tmp/")
             && !normalized.starts_with("/home/")
             && !normalized.starts_with("/Users/")
         {
             warn!("Access to restricted path attempted: {}", normalized);
+            return Err("Invalid path: outside allowed directories".to_string());
+        }
+    }
+    // Handle Windows paths (drive letters like C:, D:, etc.)
+    else if normalized.len() >= 2 
+        && normalized.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+        && normalized.chars().nth(1) == Some(':')
+    {
+        // Windows absolute path - allow if it contains WaveType or is in user directories
+        // Note: Windows paths are typically handled by Tauri's path helpers,
+        // but we validate here as an extra safety measure
+        if !normalized.contains("WaveType") 
+            && !normalized.contains("AppData")
+            && !normalized.contains("Users")
+        {
+            warn!("Access to restricted Windows path attempted: {}", normalized);
             return Err("Invalid path: outside allowed directories".to_string());
         }
     }
@@ -119,6 +135,7 @@ pub struct RecorderState(pub Arc<Mutex<Option<AudioRecorder>>>);
 pub struct TranscriberState(pub Arc<Mutex<Option<Transcriber>>>);
 pub struct DownloaderState(pub Arc<ModelDownloader>);
 pub struct LicenseManagerState(pub Arc<LicenseManager>);
+pub struct TextInjectorState(pub Arc<Mutex<text_inject::TextInjector>>);
 // Rate limiter: 100 requests per minute per action
 pub struct RecordingRateLimiter(pub Arc<RateLimiter>);
 pub struct TranscriptionRateLimiter(pub Arc<RateLimiter>);
@@ -684,8 +701,19 @@ async fn delete_model(
 }
 
 #[tauri::command]
-fn is_model_downloaded(downloader: State<DownloaderState>, model_id: String) -> bool {
-    downloader.0.is_model_downloaded(&model_id)
+fn is_model_downloaded(downloader: State<DownloaderState>, model_id: String) -> CommandResult<bool> {
+    // Validate model_id against allowed values
+    const VALID_MODEL_IDS: &[&str] = &[
+        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
+        "tiny.en", "base.en", "small.en", "medium.en",
+        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
+    ];
+    if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
+        ));
+    }
+    Ok(downloader.0.is_model_downloaded(&model_id))
 }
 
 #[tauri::command]
@@ -694,12 +722,23 @@ fn get_downloaded_models(downloader: State<DownloaderState>) -> Vec<String> {
 }
 
 #[tauri::command]
-fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> String {
-    downloader
+fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> CommandResult<String> {
+    // Validate model_id against allowed values
+    const VALID_MODEL_IDS: &[&str] = &[
+        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
+        "tiny.en", "base.en", "small.en", "medium.en",
+        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
+    ];
+    if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
+        return Err(CommandError::Database(
+            rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
+        ));
+    }
+    Ok(downloader
         .0
         .get_model_path(&model_id)
         .to_string_lossy()
-        .to_string()
+        .to_string())
 }
 
 // ==================== Post-Processing Commands ====================
@@ -721,7 +760,7 @@ fn post_process_text(text: String) -> CommandResult<String> {
 // ==================== Text Injection Commands ====================
 
 #[tauri::command]
-fn inject_text(text: String) -> CommandResult<()> {
+fn inject_text(injector: State<TextInjectorState>, text: String) -> CommandResult<()> {
     // Sanitize input - limit text length and remove control characters
     let sanitized = sanitize_text(&text, 100_000).map_err(|e| CommandError::TextInjection(e))?;
 
@@ -729,11 +768,15 @@ fn inject_text(text: String) -> CommandResult<()> {
         return Err(CommandError::TextInjection("No text to inject".to_string()));
     }
 
-    text_inject::inject_text_once(&sanitized).map_err(CommandError::TextInjection)
+    // Reuse injector instance for better performance (avoids recreating each time)
+    let mut injector_guard = injector.0.lock().unwrap();
+    injector_guard
+        .inject_text(&sanitized)
+        .map_err(CommandError::TextInjection)
 }
 
 #[tauri::command]
-fn execute_keyboard_shortcut(shortcut: String) -> CommandResult<()> {
+fn execute_keyboard_shortcut(injector: State<TextInjectorState>, shortcut: String) -> CommandResult<()> {
     // Validate shortcut against allowed values
     let allowed_shortcuts = [
         "undo",
@@ -765,7 +808,11 @@ fn execute_keyboard_shortcut(shortcut: String) -> CommandResult<()> {
         )));
     }
 
-    text_inject::execute_shortcut(&shortcut).map_err(CommandError::TextInjection)
+    // Reuse injector instance for better performance
+    let mut injector_guard = injector.0.lock().unwrap();
+    injector_guard
+        .execute_shortcut(&shortcut)
+        .map_err(CommandError::TextInjection)
 }
 
 // ==================== Transcription History Commands ====================
@@ -1613,6 +1660,11 @@ pub fn run() {
 
             // Initialize license manager
             app.manage(LicenseManagerState(Arc::new(LicenseManager::new())));
+
+            // Initialize text injector (reused for better performance)
+            let text_injector = text_inject::TextInjector::new()
+                .expect("Failed to initialize text injector");
+            app.manage(TextInjectorState(Arc::new(Mutex::new(text_injector))));
 
             // Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
