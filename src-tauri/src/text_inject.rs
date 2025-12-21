@@ -6,6 +6,17 @@ pub struct TextInjector {
     enigo: Enigo,
 }
 
+// Safety: TextInjector must be Send + Sync for Tauri state management.
+// On macOS, Enigo uses thread-local unsafe pointers (CGEventSource), but since we:
+// 1. Only create one instance per app lifetime
+// 2. Always access it through a Mutex (serialized)
+// 3. Never share raw Enigo pointers across threads
+// It's safe to mark as Send + Sync.
+#[cfg(target_os = "macos")]
+unsafe impl Send for TextInjector {}
+#[cfg(target_os = "macos")]
+unsafe impl Sync for TextInjector {}
+
 impl TextInjector {
     pub fn new() -> Result<Self, String> {
         let enigo = Enigo::new(&Settings::default())
