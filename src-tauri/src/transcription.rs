@@ -65,13 +65,26 @@ impl Transcriber {
 
         // Use more threads for faster CPU processing
         // Match available CPU cores for optimal performance
+        // Windows optimization: Use all available cores for faster inference
+        #[cfg(target_os = "windows")]
+        let num_threads = std::thread::available_parallelism()
+            .map(|p| p.get() as i32)
+            .unwrap_or(4); // Don't cap on Windows - let it use all cores
+        
+        #[cfg(not(target_os = "windows"))]
         let num_threads = std::thread::available_parallelism()
             .map(|p| p.get() as i32)
             .unwrap_or(4)
-            .min(8); // Cap at 8 threads
+            .min(8); // Cap at 8 threads on other platforms
+        
         params.set_n_threads(num_threads);
 
         // Disable entropy threshold to speed up processing
+        // Windows: Use more aggressive threshold for faster decoding
+        #[cfg(target_os = "windows")]
+        params.set_entropy_thold(3.2); // More permissive on Windows for speed
+        
+        #[cfg(not(target_os = "windows"))]
         params.set_entropy_thold(2.8);
 
         // Set temperature to 0 for deterministic, faster decoding

@@ -31,7 +31,8 @@ impl TextInjector {
         }
 
         // No delay needed - focus is already on target window when hotkey is pressed
-        // This eliminates unnecessary wait time for maximum speed
+        // This eliminates unnecessary wait time for maximum speed.
+        // Windows note: Enigo uses Direct Input API which is optimized for fast injection
 
         // Type the text
         self.enigo
@@ -43,9 +44,6 @@ impl TextInjector {
 
     /// Execute a keyboard shortcut
     pub fn execute_shortcut(&mut self, shortcut: &str) -> Result<(), String> {
-        // Minimal delay to ensure focus (reduced from 50ms for speed)
-        thread::sleep(Duration::from_millis(10));
-
         match shortcut {
             "undo" => {
                 // Ctrl+Z (or Cmd+Z on macOS)
@@ -163,15 +161,14 @@ impl TextInjector {
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
+                    // Optimized for Windows: minimal delay between operations
                     // Go to start of line
                     self.enigo.key(Key::Home, Direction::Click).ok();
-                    thread::sleep(Duration::from_millis(5));
-                    // Select to end
+                    // Select to end (no delay - operations are queued)
                     self.enigo.key(Key::Shift, Direction::Press).ok();
                     self.enigo.key(Key::End, Direction::Click).ok();
                     self.enigo.key(Key::Shift, Direction::Release).ok();
-                    thread::sleep(Duration::from_millis(5));
-                    // Delete
+                    // Delete (no delay - keyboard buffer handles sequencing)
                     self.enigo.key(Key::Backspace, Direction::Click).ok();
                 }
             }

@@ -83,8 +83,9 @@
     },
     "macOS": {
       "entitlements": "WaveType.entitlements",
-      "minimumSystemVersion": "10.15",
+      "minimumSystemVersion": "13.0",
       "frameworks": [],
+      "hardenedRuntime": true,
       "signingIdentity": null,
       "providerShortName": null,
       "dmg": {
