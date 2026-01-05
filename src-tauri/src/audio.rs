@@ -80,8 +80,8 @@ impl AudioRecorder {
             let _ = handle.join();
         }
 
-        // Minimal delay to ensure all samples are collected (reduced from 20ms for speed)
-        thread::sleep(std::time::Duration::from_millis(5));
+        // No delay needed - samples are already collected via mutex
+        // The stream is already stopped at this point
 
         let samples = self.samples.lock().unwrap().clone();
 
@@ -217,9 +217,8 @@ fn run_recording_thread(
         .play()
         .map_err(|e| format!("Failed to start stream: {}", e))?;
 
-    // Wait for stop command or check is_recording flag
-    // Using 100ms polling instead of 50ms to reduce CPU wake-ups
-    // This is still responsive enough for audio recording control
+    // Wait for stop command with minimal latency
+    // Using 5ms polling for near-instant response when user stops recording
     loop {
         if let Ok(RecorderCommand::Stop) = cmd_rx.try_recv() {
             break;
@@ -227,10 +226,8 @@ fn run_recording_thread(
         if !is_recording.load(Ordering::SeqCst) {
             break;
         }
-        thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    // Stream is dropped here, stopping the recording
+        thread::sleep(std::time::Duration::from_millis(5));
+    }    // Stream is dropped here, stopping the recording
     Ok(())
 }
 
@@ -285,7 +282,7 @@ fn resample(samples: &[f32], source_rate: u32, target_rate: u32) -> Vec<f32> {
 }
 
 // Save audio to WAV file for debugging
-#[allow(dead_code)]
+// Save audio to WAV file
 pub fn save_wav(samples: &[f32], path: &str) -> Result<(), String> {
     let spec = hound::WavSpec {
         channels: 1,

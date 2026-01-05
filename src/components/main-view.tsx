@@ -204,7 +204,8 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       const startTime = Date.now();
       const text = await stopTranscribeAndInject(
         currentSettings.postProcessingEnabled,
-        currentSettings.clipboardMode
+        currentSettings.clipboardMode,
+        selectedModel?.id
       );
       const durationMs = Date.now() - startTime;
       

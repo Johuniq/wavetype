@@ -6182,6 +6182,7 @@ name = "vox-ai"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
+ "arboard",
  "byteorder",
  "chrono",
  "cpal",

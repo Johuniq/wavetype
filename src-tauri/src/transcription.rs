@@ -12,7 +12,17 @@ impl Transcriber {
             return Err(format!("Model file not found: {}", model_path));
         }
 
-        let ctx = WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
+        // Configure context parameters for maximum speed
+        let mut ctx_params = WhisperContextParameters::default();
+        
+        // Enable flash attention for faster inference (CPU-only optimization)
+        // Flash attention reduces memory bandwidth and speeds up attention computation
+        ctx_params.flash_attn(true);
+        
+        // GPU is handled via compile-time features (metal on macOS, cuda/vulkan on others)
+        // The default will use GPU if the feature is enabled
+        
+        let ctx = WhisperContext::new_with_params(model_path, ctx_params)
             .map_err(|e| format!("Failed to load Whisper model: {}", e))?;
 
         Ok(Self {
@@ -37,58 +47,51 @@ impl Transcriber {
         // Disable translation, we want transcription
         params.set_translate(false);
 
-        // ========== SPEED OPTIMIZATIONS ==========
+        // ========== AGGRESSIVE SPEED OPTIMIZATIONS ==========
 
-        // Single segment mode for short recordings (< 30 seconds)
-        // This is faster for voice input which is typically short
+        // Single segment mode - fastest for voice input (< 30 seconds)
         params.set_single_segment(true);
 
-        // Disable all printing for speed
+        // Disable ALL output printing for maximum speed
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);
         params.set_print_special(false);
 
-        // Disable token timestamps (not needed for text output)
+        // Disable ALL timestamps - not needed for text output
         params.set_token_timestamps(false);
+        params.set_no_timestamps(true);
 
-        // Suppress non-speech tokens for cleaner output
+        // Disable context - each utterance is independent
+        params.set_no_context(true);
+
+        // Suppress non-speech tokens for cleaner, faster output
         params.set_suppress_blank(true);
         params.set_suppress_non_speech_tokens(true);
 
-        // Reduce max tokens for faster processing (typical sentence)
-        params.set_max_tokens(128);
+        // Reduced max tokens - voice input is typically short
+        params.set_max_tokens(64);
 
-        // Set audio context to 0 for faster processing
-        // (uses default context from model)
+        // Audio context 0 = use default from model (fastest)
         params.set_audio_ctx(0);
 
-        // Use more threads for faster CPU processing
-        // Match available CPU cores for optimal performance
-        // Windows optimization: Use all available cores for faster inference
-        #[cfg(target_os = "windows")]
+        // Use all available CPU cores for parallel inference
         let num_threads = std::thread::available_parallelism()
             .map(|p| p.get() as i32)
-            .unwrap_or(4); // Don't cap on Windows - let it use all cores
-        
-        #[cfg(not(target_os = "windows"))]
-        let num_threads = std::thread::available_parallelism()
-            .map(|p| p.get() as i32)
-            .unwrap_or(4)
-            .min(8); // Cap at 8 threads on other platforms
-        
+            .unwrap_or(4);
         params.set_n_threads(num_threads);
 
-        // Disable entropy threshold to speed up processing
-        // Windows: Use more aggressive threshold for faster decoding
-        #[cfg(target_os = "windows")]
-        params.set_entropy_thold(3.2); // More permissive on Windows for speed
-        
-        #[cfg(not(target_os = "windows"))]
+        // Higher entropy threshold = faster decoding, slightly less accuracy
         params.set_entropy_thold(2.8);
 
-        // Set temperature to 0 for deterministic, faster decoding
+        // Temperature 0 = greedy decoding (fastest, deterministic)
         params.set_temperature(0.0);
+
+        // Disable beam search fallback - stick with greedy for speed
+        params.set_temperature_inc(0.0);
+
+        // Speed penalty - prefer shorter sequences (faster decoding)
+        params.set_length_penalty(1.0);
 
         // Create state for this transcription
         let mut state = self

@@ -32,8 +32,8 @@ Recording modes
 
 | Mode         | Hotkey                                 | Behavior                                      |
 | ------------ | -------------------------------------- | --------------------------------------------- |
-| Push-to-talk | configurable (default: `Ctrl+Shift+R`) | Hold to record, release to transcribe         |
-| Toggle       | configurable (default: `Ctrl+Shift+T`) | Press to start recording, press again to stop |
+| Push-to-talk | configurable (default: `Alt+Shift+S`) | Hold to record, release to transcribe         |
+| Toggle       | configurable (default: `Alt+Shift+D`) | Press to start recording, press again to stop |
 
 ## Configuration and data location
 

@@ -16,7 +16,7 @@ export function KeyboardShortcut({
   className,
   size = "md",
 }: KeyboardShortcutProps) {
-  // Parse the shortcut string (e.g., "Ctrl+Shift+R" -> ["Ctrl", "Shift", "R"])
+  // Parse the shortcut string (e.g., "Alt+Shift+S" -> ["Alt", "Shift", "S"])
   const keys = shortcut.split("+").map((key) => key.trim());
 
   const sizeClasses = {

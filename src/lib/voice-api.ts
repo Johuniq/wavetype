@@ -33,6 +33,10 @@ export async function cancelRecording(): Promise<void> {
   await invoke("cancel_recording");
 }
 
+export async function saveTempAudio(audioSamples: number[]): Promise<string> {
+  return await invoke<string>("save_temp_audio", { samples: audioSamples });
+}
+
 export async function isRecording(): Promise<boolean> {
   return await invoke<boolean>("is_recording");
 }
@@ -57,6 +61,13 @@ export async function loadModel(
   modelId: string,
   language: string = "en"
 ): Promise<void> {
+  if (modelId.startsWith("parakeet-")) {
+    const { startParakeet, loadParakeetModel } = await import("./parakeet-api");
+    await startParakeet();
+    const version = modelId.includes("v2") ? "v2" : "v3";
+    await loadParakeetModel(version, true); // true to auto-download if needed
+    return;
+  }
   await invoke("load_model", { modelId, language });
 }
 
@@ -84,10 +95,28 @@ export async function transcribeFile(
 // ============================================
 
 export async function downloadModel(modelId: string): Promise<string> {
+  if (modelId.startsWith("parakeet-")) {
+    const { startParakeet, loadParakeetModel } = await import("./parakeet-api");
+    await startParakeet();
+    const version = modelId.includes("v2") ? "v2" : "v3";
+    await loadParakeetModel(version, true); // true to force download
+    return "downloading";
+  }
   return await invoke<string>("download_model", { modelId });
 }
 
 export async function deleteModel(modelId: string): Promise<void> {
+  if (modelId.startsWith("parakeet-")) {
+    const { startParakeet, sendParakeetCommand } = await import("./parakeet-api");
+    await startParakeet();
+    await sendParakeetCommand({
+      type: "delete_model",
+      model_version: modelId.includes("v2") ? "v2" : "v3",
+    });
+    // Also update database state via Tauri command
+    await invoke("delete_model", { modelId });
+    return;
+  }
   await invoke("delete_model", { modelId });
 }
 
@@ -167,18 +196,55 @@ export interface VoiceToTextOptions {
  * 4. Optionally inject text to active cursor
  */
 export async function completeVoiceToText(
-  options: VoiceToTextOptions = {}
+  options: VoiceToTextOptions = {},
+  selectedModelId?: string
 ): Promise<string | null> {
   try {
     options.onRecordingStop?.();
     options.onTranscriptionStart?.();
 
-    // Stop recording and transcribe
-    let text = await recordAndTranscribe();
+    let text = "";
+
+    // Check if we are using a Parakeet model
+    if (selectedModelId?.startsWith("parakeet-")) {
+      const samples = await stopRecording();
+      const tempPath = await saveTempAudio(samples);
+      
+      // For Parakeet, we use the sidecar API which is async via events
+      // We'll return a promise that resolves when the event is received
+      const { sendParakeetCommand, onParakeetResponse } = await import("./parakeet-api");
+      
+      text = await new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Transcription timed out")), 30000);
+        
+        onParakeetResponse((res) => {
+          if (res.type === "transcription" && res.text !== undefined) {
+            clearTimeout(timeout);
+            resolve(res.text);
+          } else if (res.type === "error") {
+            clearTimeout(timeout);
+            reject(new Error(res.message || "Parakeet transcription failed"));
+          }
+        }).then((unlisten) => {
+          sendParakeetCommand({
+            type: "transcribe",
+            audio_path: tempPath,
+          }).catch((err) => {
+            unlisten();
+            reject(err);
+          });
+        });
+      });
+    } else {
+      // Standard Whisper flow
+      text = await recordAndTranscribe();
+    }
 
     // Apply post-processing if enabled
     if (options.enablePostProcessing && text) {
       text = await postProcessText(text);
+      // Process voice commands (execute actions and remove from text)
+      text = await processVoiceCommands(text);
     }
 
     options.onTranscriptionComplete?.(text);
@@ -327,22 +393,20 @@ async function processVoiceCommands(text: string): Promise<string> {
  */
 export async function stopTranscribeAndInject(
   enablePostProcessing: boolean = true,
-  clipboardMode: boolean = false
+  clipboardMode: boolean = false,
+  selectedModelId?: string
 ): Promise<string | null> {
   try {
-    let text = await recordAndTranscribe();
-    if (enablePostProcessing && text) {
-      text = await postProcessText(text);
-      // Process voice commands (execute actions and remove from text)
-      text = await processVoiceCommands(text);
-    }
-    // Only inject/copy if there's text left after processing commands
+    let text = await completeVoiceToText({
+      enablePostProcessing,
+      injectToActiveWindow: !clipboardMode,
+    }, selectedModelId);
+
     if (text && text.trim()) {
       if (clipboardMode) {
         await writeText(text);
-      } else {
-        await injectText(text);
       }
+      // Note: injectText is already handled by completeVoiceToText if injectToActiveWindow is true
     }
     return text;
   } catch (error) {

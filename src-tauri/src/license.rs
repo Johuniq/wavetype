@@ -58,7 +58,7 @@ pub struct LicenseInfo {
 }
 
 /// License status enum matching Polar API statuses
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum LicenseStatus {
     /// License is valid and active
@@ -76,13 +76,8 @@ pub enum LicenseStatus {
     /// Network error - using cached license
     Offline,
     /// No license activated
+    #[default]
     NotActivated,
-}
-
-impl Default for LicenseStatus {
-    fn default() -> Self {
-        LicenseStatus::NotActivated
-    }
 }
 
 impl std::fmt::Display for LicenseStatus {
@@ -503,7 +498,7 @@ impl LicenseManager {
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
-            .expect("Failed to create HTTP client");
+            .unwrap_or_else(|_| Client::new());
 
         Self {
             client,

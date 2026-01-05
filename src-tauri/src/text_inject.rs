@@ -1,9 +1,9 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-use std::thread;
 use std::time::Duration;
 
 pub struct TextInjector {
     enigo: Enigo,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 // Safety: TextInjector must be Send + Sync for Tauri state management.
@@ -19,10 +19,22 @@ unsafe impl Sync for TextInjector {}
 
 impl TextInjector {
     pub fn new() -> Result<Self, String> {
-        let enigo = Enigo::new(&Settings::default())
+        // Platform-specific settings for fastest text injection
+        let settings = Settings {
+            // Linux: 0 delay for instant key events (X11/Wayland)
+            linux_delay: 0,
+            // Release modifier keys when dropped to prevent stuck keys
+            release_keys_when_dropped: true,
+            ..Settings::default()
+        };
+        
+        let enigo = Enigo::new(&settings)
             .map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
+        
+        // Initialize clipboard - critical for fast text injection
+        let clipboard = arboard::Clipboard::new().ok();
 
-        Ok(Self { enigo })
+        Ok(Self { enigo, clipboard })
     }
 
     pub fn inject_text(&mut self, text: &str) -> Result<(), String> {
@@ -30,15 +42,72 @@ impl TextInjector {
             return Ok(());
         }
 
-        // No delay needed - focus is already on target window when hotkey is pressed
-        // This eliminates unnecessary wait time for maximum speed.
-        // Windows note: Enigo uses Direct Input API which is optimized for fast injection
+        // ALWAYS use clipboard paste - it's significantly faster than keystroke simulation
+        // Clipboard paste is instant regardless of text length
+        // Direct typing can be 10-100x slower for longer text
+        if let Some(ref mut cb) = self.clipboard {
+            // Save current clipboard content to restore later (optional, for user convenience)
+            let _previous = cb.get_text().ok();
+            
+            if cb.set_text(text).is_ok() {
+                // Small delay to ensure clipboard is ready (platform-specific)
+                #[cfg(target_os = "linux")]
+                std::thread::sleep(Duration::from_micros(500)); // X11/Wayland sync
+                
+                #[cfg(target_os = "windows")]
+                std::thread::sleep(Duration::from_micros(100)); // Windows is faster
+                
+                // Execute Paste shortcut
+                self.execute_paste()?;
+                
+                // Optional: Restore previous clipboard after a brief delay
+                // This is commented out as it may interfere with user workflow
+                // if let Some(prev) = _previous {
+                //     std::thread::sleep(Duration::from_millis(50));
+                //     let _ = cb.set_text(&prev);
+                // }
+                
+                return Ok(());
+            }
+        }
 
-        // Type the text
+        // Fallback to direct typing only if clipboard fails
         self.enigo
             .text(text)
             .map_err(|e| format!("Failed to inject text: {}", e))?;
 
+        Ok(())
+    }
+
+    /// Optimized paste operation for each platform
+    fn execute_paste(&mut self) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: Cmd+V
+            self.enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: Ctrl+V with minimal delay
+            self.enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: Ctrl+V - works on X11 and most Wayland compositors
+            self.enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+            self.enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+            
+            // Additional sync delay for X11/Wayland
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        
         Ok(())
     }
 

@@ -59,7 +59,6 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "externalBin": [],
     "category": "Utility",
     "shortDescription": "Voice-to-text desktop app powered by AI",
     "longDescription": "WaveType is a powerful voice-to-text application that lets you dictate text anywhere on your computer using AI-powered speech recognition. Features include push-to-talk and toggle recording modes, multiple Whisper AI model sizes, automatic text injection, transcription history, and file transcription support.",

@@ -19,6 +19,15 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "parakeet-sidecar",
+          "sidecar": true
+        }
+      ]
+    },
     "store:allow-get",
     "store:allow-set",
     "store:allow-delete",

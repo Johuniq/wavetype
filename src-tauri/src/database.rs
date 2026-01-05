@@ -23,8 +23,8 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            push_to_talk_key: "Ctrl+Shift+R".to_string(),
-            toggle_key: "Ctrl+Shift+T".to_string(),
+            push_to_talk_key: "Alt+Shift+S".to_string(),
+            toggle_key: "Alt+Shift+D".to_string(),
             hotkey_mode: "push-to-talk".to_string(),
             language: "en".to_string(),
             selected_model_id: "base".to_string(),
@@ -129,8 +129,8 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                push_to_talk_key TEXT NOT NULL DEFAULT 'Ctrl+Shift+R',
-                toggle_key TEXT NOT NULL DEFAULT 'Ctrl+Shift+T',
+                push_to_talk_key TEXT NOT NULL DEFAULT 'Alt+Shift+S',
+                toggle_key TEXT NOT NULL DEFAULT 'Alt+Shift+D',
                 hotkey_mode TEXT NOT NULL DEFAULT 'push-to-talk',
                 language TEXT NOT NULL DEFAULT 'en',
                 selected_model_id TEXT NOT NULL DEFAULT 'base',
@@ -161,6 +161,17 @@ impl Database {
         // Add show_recording_overlay column if it doesn't exist (migration for existing DBs)
         let _ = conn.execute(
             "ALTER TABLE settings ADD COLUMN show_recording_overlay INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+
+        // Migration: Update default hotkeys if they are still the old ones
+        // This ensures existing users get the new non-conflicting defaults
+        let _ = conn.execute(
+            "UPDATE settings SET push_to_talk_key = 'Alt+Shift+S' WHERE push_to_talk_key = 'Ctrl+Shift+R'",
+            [],
+        );
+        let _ = conn.execute(
+            "UPDATE settings SET toggle_key = 'Alt+Shift+D' WHERE toggle_key = 'Ctrl+Shift+T'",
             [],
         );
 
@@ -364,6 +375,23 @@ impl Database {
                 "Latest distilled model. Excellent performance.",
                 "[\"en\"]",
             ),
+            // Parakeet models (macOS only)
+            (
+                "parakeet-v3",
+                "🐦 Parakeet v3 (TDT)",
+                "500 MB",
+                500_i64 * 1024 * 1024,
+                "Ultra-fast NVIDIA Parakeet model. Optimized for Apple Neural Engine.",
+                "[\"en\"]",
+            ),
+            (
+                "parakeet-v2",
+                "🐦 Parakeet v2 (TDT)",
+                "500 MB",
+                500_i64 * 1024 * 1024,
+                "Previous generation Parakeet model. Very fast and accurate.",
+                "[\"en\"]",
+            ),
         ];
 
         for (id, name, size, size_bytes, description, languages) in models {
@@ -462,8 +490,7 @@ impl Database {
             return Err(rusqlite::Error::InvalidParameterName(format!(
                 "Invalid setting key: {}",
                 key
-            ))
-            .into());
+            )));
         }
 
         let conn = self.conn.lock().unwrap();

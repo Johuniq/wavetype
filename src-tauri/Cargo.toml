@@ -9,7 +9,7 @@ repository = "https://github.com/johuniq/WaveType"
 readme = "README.md"
 keywords = ["voice", "speech-to-text", "transcription", "whisper", "tauri"]
 categories = ["multimedia::audio"]
-rust-version = "1.70"
+rust-version = "1.81"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -48,6 +48,7 @@ cpal = "0.15"
 
 # OS-level input simulation (for text injection)
 enigo = "0.3"
+arboard = "3.4"
 
 # Async runtime utilities
 tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
@@ -91,7 +92,22 @@ byteorder = "1.5"
 
 # UUID for unique identifiers
 uuid = { version = "1", features = ["v4"] }
+
+# Audio format decoding
 symphonia = { version = "0.5.5", features = ["mp3", "ogg", "flac", "aac", "isomp4"] }
+
+# Platform-specific GPU acceleration for Whisper
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.12", features = ["metal"] }
+
+# Linux: CUDA support for NVIDIA GPUs (optional, falls back to CPU if unavailable)
+# Note: Requires CUDA toolkit installed. Comment out if not using NVIDIA GPU.
+# [target.'cfg(target_os = "linux")'.dependencies]
+# whisper-rs = { version = "0.12", features = ["cuda"] }
+
+# Windows: CUDA support (optional)
+# [target.'cfg(target_os = "windows")'.dependencies]
+# whisper-rs = { version = "0.12", features = ["cuda"] }
 
 # Production profile optimizations
 [profile.release]

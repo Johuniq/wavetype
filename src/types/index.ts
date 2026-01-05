@@ -100,8 +100,8 @@ export interface AppState {
 
 // Default settings
 export const DEFAULT_SETTINGS: AppSettings = {
-  pushToTalkKey: "Ctrl+Shift+R",
-  toggleKey: "Ctrl+Shift+T",
+  pushToTalkKey: "Alt+Shift+S",
+  toggleKey: "Alt+Shift+D",
   hotkeyMode: "push-to-talk",
   language: "en",
   selectedModelId: "base",
@@ -118,7 +118,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export type ModelCategory = "standard" | "english" | "distil" | "large";
 
 // Transcription engine types
-export type TranscriptionEngine = "whisper";
+export type TranscriptionEngine = "whisper" | "parakeet";
 
 // Available Whisper models
 export const WHISPER_MODELS: WhisperModel[] = [
@@ -246,3 +246,26 @@ export const WHISPER_MODELS: WhisperModel[] = [
     languages: ["en", "bn"],
   },
 ];
+
+// Available Parakeet models (macOS only)
+export const PARAKEET_MODELS: WhisperModel[] = [
+  {
+    id: "parakeet-v3",
+    name: "🐦 Parakeet v3 (TDT)",
+    size: "500 MB",
+    sizeBytes: 500 * 1024 * 1024,
+    description: "Ultra-fast NVIDIA Parakeet model. Optimized for Apple Neural Engine.",
+    languages: ["en"],
+    recommended: true,
+  },
+  {
+    id: "parakeet-v2",
+    name: "🐦 Parakeet v2 (TDT)",
+    size: "500 MB",
+    sizeBytes: 500 * 1024 * 1024,
+    description: "Previous generation Parakeet model. Very fast and accurate.",
+    languages: ["en"],
+  },
+];
+
+export const ALL_MODELS = [...WHISPER_MODELS, ...PARAKEET_MODELS];

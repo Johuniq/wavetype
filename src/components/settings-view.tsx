@@ -1,57 +1,58 @@
 import { Logo } from "@/components/logo";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UpdaterView } from "@/components/updater-view";
 import { useToast } from "@/hooks/use-toast";
 import {
-  downloadFile,
-  exportAppData,
-  getStorageStats,
+    downloadFile,
+    exportAppData,
+    getStorageStats,
 } from "@/lib/data-management";
 import { setAutoStart } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
-  deleteModel,
-  downloadModel,
-  onDownloadProgress,
+    deleteModel,
+    downloadModel,
+    onDownloadProgress,
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
 import type { WhisperModel } from "@/types";
+import { platform } from "@tauri-apps/plugin-os";
 import {
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  Cpu,
-  Database,
-  Download,
-  FileDown,
-  Keyboard,
-  Loader2,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-  Volume2,
-  Waves,
+    ArrowLeft,
+    Check,
+    ChevronRight,
+    Cpu,
+    Database,
+    Download,
+    FileDown,
+    Keyboard,
+    Loader2,
+    RotateCcw,
+    Sparkles,
+    Trash2,
+    Volume2,
+    Waves,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 interface SettingsViewProps {
@@ -81,6 +82,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   } | null>(null);
   const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
   const [recordingToggle, setRecordingToggle] = useState(false);
+  const [currentPlatform, setCurrentPlatform] = useState<string>("");
+
+  useEffect(() => {
+    setCurrentPlatform(platform());
+  }, []);
 
   // Load storage stats
   useEffect(() => {
@@ -354,7 +360,14 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </div>
 
           <div className="space-y-2">
-            {availableModels.map((model) => (
+            {availableModels
+              .filter((model) => {
+                if (model.id.startsWith("parakeet-")) {
+                  return currentPlatform === "macos";
+                }
+                return true;
+              })
+              .map((model) => (
               <div
                 key={model.id}
                 className={cn(

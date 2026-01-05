@@ -8,5 +8,13 @@
     <true/>
     <key>com.apple.security.network.client</key>
     <true/>
+    <!-- Required for text injection via clipboard paste -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <!-- Required for global hotkey registration -->
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.systemevents</string>
+    </array>
 </dict>
 </plist>

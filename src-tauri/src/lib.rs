@@ -9,6 +9,8 @@ mod post_process;
 mod security;
 mod text_inject;
 mod transcription;
+#[cfg(target_os = "macos")]
+mod parakeet;
 
 use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
@@ -29,6 +31,8 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use transcription::Transcriber;
+#[cfg(target_os = "macos")]
+use parakeet::{ParakeetState, ParakeetSidecar, start_parakeet, send_parakeet_command};
 
 // Application version from Cargo.toml
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -54,7 +58,7 @@ impl RateLimiter {
         let mut requests = self.requests.lock().unwrap();
         let now = Instant::now();
 
-        let timestamps = requests.entry(key.to_string()).or_insert_with(Vec::new);
+        let timestamps = requests.entry(key.to_string()).or_default();
 
         // Remove old timestamps outside the window
         timestamps.retain(|&t| now.duration_since(t) < self.window);
@@ -282,13 +286,26 @@ fn stop_recording(recorder: State<RecorderState>) -> CommandResult<Vec<f32>> {
     let mut recorder_guard = recorder.0.lock().unwrap();
 
     if let Some(ref mut rec) = *recorder_guard {
-        let samples = rec.stop_recording().map_err(CommandError::Recording)?;
-        Ok(samples)
+        rec.stop_recording().map_err(|e| {
+            error!("Failed to stop recording: {}", e);
+            CommandError::Recording(e)
+        })
     } else {
-        Err(CommandError::Recording(
-            "No recorder initialized".to_string(),
-        ))
+        Err(CommandError::Recording("No recorder initialized".to_string()))
     }
+}
+
+#[tauri::command]
+fn save_temp_audio(app: tauri::AppHandle, samples: Vec<f32>) -> CommandResult<String> {
+    let temp_dir = app.path().app_cache_dir().map_err(|e| CommandError::Io(std::io::Error::other(e.to_string())))?;
+    std::fs::create_dir_all(&temp_dir).map_err(CommandError::Io)?;
+    
+    let file_path = temp_dir.join(format!("temp_recording_{}.wav", uuid::Uuid::new_v4()));
+    let path_str = file_path.to_str().ok_or_else(|| CommandError::Io(std::io::Error::other("Invalid path")))?;
+    
+    audio::save_wav(&samples, path_str).map_err(CommandError::Recording)?;
+    
+    Ok(path_str.to_string())
 }
 
 #[tauri::command]
@@ -468,7 +485,7 @@ async fn transcribe_file(
     }
 
     // Sanitize and validate file path
-    let safe_path = sanitize_path(&file_path).map_err(|e| CommandError::Transcription(e))?;
+    let safe_path = sanitize_path(&file_path).map_err(CommandError::Transcription)?;
 
     let path = Path::new(&safe_path);
     if !path.exists() {
@@ -690,29 +707,37 @@ async fn delete_model(
     db: State<'_, DbState>,
     model_id: String,
 ) -> CommandResult<()> {
-    downloader
-        .0
-        .delete_model(&model_id)
-        .await
-        .map_err(CommandError::Download)?;
+    if !model_id.starts_with("parakeet-") {
+        downloader
+            .0
+            .delete_model(&model_id)
+            .await
+            .map_err(CommandError::Download)?;
+    }
     db.0.set_model_downloaded(&model_id, false, None)
         .map_err(CommandError::Database)?;
     Ok(())
 }
 
 #[tauri::command]
-fn is_model_downloaded(downloader: State<DownloaderState>, model_id: String) -> CommandResult<bool> {
+fn is_model_downloaded(db: State<DbState>, downloader: State<DownloaderState>, model_id: String) -> CommandResult<bool> {
     // Validate model_id against allowed values
     const VALID_MODEL_IDS: &[&str] = &[
         "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
         "tiny.en", "base.en", "small.en", "medium.en",
         "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
+        "parakeet-v2", "parakeet-v3",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(
             rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
         ));
     }
+    if model_id.starts_with("parakeet-") {
+        let db = db.0.get_model(&model_id).map_err(CommandError::Database)?;
+        return Ok(db.map(|m| m.downloaded).unwrap_or(false));
+    }
+
     Ok(downloader.0.is_model_downloaded(&model_id))
 }
 
@@ -745,7 +770,7 @@ fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> Comma
 
 #[tauri::command]
 fn post_process_text(text: String) -> CommandResult<String> {
-    let sanitized = sanitize_text(&text, 100_000).map_err(|e| CommandError::PostProcessing(e))?;
+    let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
 
     if sanitized.is_empty() {
         return Ok(String::new());
@@ -762,7 +787,7 @@ fn post_process_text(text: String) -> CommandResult<String> {
 #[tauri::command]
 fn inject_text(injector: State<TextInjectorState>, text: String) -> CommandResult<()> {
     // Sanitize input - limit text length and remove control characters
-    let sanitized = sanitize_text(&text, 100_000).map_err(|e| CommandError::TextInjection(e))?;
+    let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::TextInjection)?;
 
     if sanitized.is_empty() {
         return Err(CommandError::TextInjection("No text to inject".to_string()));
@@ -868,7 +893,7 @@ fn add_transcription(
     }
 
     // Validate duration range (0 to 1 hour in milliseconds)
-    if duration_ms < 0 || duration_ms > 3_600_000 {
+    if !(0..=3_600_000).contains(&duration_ms) {
         return Err(CommandError::Database(
             rusqlite::Error::InvalidParameterName("Invalid duration".to_string()),
         ));
@@ -885,7 +910,7 @@ fn get_transcription_history(
     offset: Option<i32>,
 ) -> CommandResult<Vec<TranscriptionHistory>> {
     // Validate and cap limit
-    let safe_limit = limit.unwrap_or(50).min(1000).max(1);
+    let safe_limit = limit.unwrap_or(50).clamp(1, 1000);
     let safe_offset = offset.unwrap_or(0).max(0);
     db.0.get_transcription_history(safe_limit, safe_offset)
         .map_err(Into::into)
@@ -1510,7 +1535,7 @@ async fn report_error(
         reporter.report(report);
 
         // Persist to disk periodically
-        if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+        if let Ok(app_data_dir) = app.path().app_data_dir() {
             let _ = reporter.persist_to_file(&app_data_dir);
         }
     }
@@ -1557,7 +1582,7 @@ async fn export_error_reports(
     };
 
     // Also save to file
-    if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
         let reports_dir = app_data_dir.join("reports");
         std::fs::create_dir_all(&reports_dir).ok();
 
@@ -1590,7 +1615,7 @@ async fn clear_error_reports() -> Result<(), CommandError> {
 #[tauri::command]
 async fn load_error_reports(app: tauri::AppHandle) -> Result<usize, CommandError> {
     if let Some(reporter) = ErrorReporter::global() {
-        if let Some(app_data_dir) = app.path().app_data_dir().ok() {
+        if let Ok(app_data_dir) = app.path().app_data_dir() {
             match reporter.load_from_file(&app_data_dir) {
                 Ok(count) => {
                     info!("Loaded {} error reports from disk", count);
@@ -1670,6 +1695,10 @@ pub fn run() {
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
 
+            // Initialize Parakeet sidecar state
+            #[cfg(target_os = "macos")]
+            app.manage(ParakeetState(Arc::new(ParakeetSidecar::new())));
+
             // Setup system tray
             setup_tray(app)?;
 
@@ -1719,6 +1748,7 @@ pub fn run() {
             // Recording
             start_recording,
             stop_recording,
+            save_temp_audio,
             cancel_recording,
             is_recording,
             // Recording overlay
@@ -1774,6 +1804,11 @@ pub fn run() {
             export_error_reports,
             clear_error_reports,
             load_error_reports,
+            // Parakeet (macOS only)
+            #[cfg(target_os = "macos")]
+            start_parakeet,
+            #[cfg(target_os = "macos")]
+            send_parakeet_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

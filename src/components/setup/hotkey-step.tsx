@@ -18,13 +18,13 @@ const hotkeyOptions = [
     mode: "push-to-talk" as const,
     title: "Push to Talk",
     description: "Hold key to record, release to transcribe",
-    defaultKey: "Ctrl+Shift+R",
+    defaultKey: "Alt+Shift+S",
   },
   {
     mode: "toggle" as const,
     title: "Toggle Mode",
     description: "Press to start/stop recording",
-    defaultKey: "Ctrl+Shift+T",
+    defaultKey: "Alt+Shift+D",
   },
 ];
 

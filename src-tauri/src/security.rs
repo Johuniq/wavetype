@@ -79,11 +79,11 @@ mod tests {
         let key = derive_encryption_key(device_id);
         let original_data = b"Hello, WaveType Secure Data!";
         
-        let encrypted = encrypt_data(original_data, &key).expect("Encryption failed");
+        let encrypted = encrypt_data(original_data, &key).unwrap();
         assert_ne!(encrypted, original_data);
         assert!(encrypted.len() > original_data.len());
         
-        let decrypted = decrypt_data(&encrypted, &key).expect("Decryption failed");
+        let decrypted = decrypt_data(&encrypted, &key).unwrap();
         assert_eq!(decrypted, original_data);
     }
 
@@ -93,7 +93,7 @@ mod tests {
         let key2 = derive_encryption_key("device-2");
         let data = b"Secret message";
         
-        let encrypted = encrypt_data(data, &key1).expect("Encryption failed");
+        let encrypted = encrypt_data(data, &key1).unwrap();
         let result = decrypt_data(&encrypted, &key2);
         assert!(result.is_err());
     }

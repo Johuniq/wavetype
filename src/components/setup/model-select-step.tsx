@@ -2,13 +2,14 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import {
-  downloadModel,
-  isModelDownloaded,
-  onDownloadProgress,
-  type DownloadProgress,
+    downloadModel,
+    isModelDownloaded,
+    onDownloadProgress,
+    type DownloadProgress,
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
 import { WHISPER_MODELS, type WhisperModel } from "@/types";
+import { platform } from "@tauri-apps/plugin-os";
 import { Check, Download, HardDrive, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -37,6 +38,11 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
     null
   );
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [currentPlatform, setCurrentPlatform] = useState<string>("");
+
+  useEffect(() => {
+    setCurrentPlatform(platform());
+  }, []);
 
   // Listen for download progress events
   useEffect(() => {
@@ -143,7 +149,14 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
             onValueChange={handleSelectModel}
             className="space-y-2"
           >
-            {models.map((model: WhisperModel) => {
+            {models
+              .filter((model) => {
+                if (model.id.startsWith("parakeet-")) {
+                  return currentPlatform === "macos";
+                }
+                return true;
+              })
+              .map((model: WhisperModel) => {
               const isSelected = selectedModel?.id === model.id;
               const isThisDownloading = downloadingModelId === model.id;
 
