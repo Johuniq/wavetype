@@ -1,43 +1,45 @@
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
-  activateLicense,
-  deactivateLicense,
-  formatExpirationDate,
-  getLicense,
-  getLicenseStatusMessage,
-  isLicenseActive,
-  maskLicenseKey,
-  validateLicense,
-  type LicenseData,
+    activateLicense,
+    deactivateLicense,
+    formatExpirationDate,
+    getDeviceInfo,
+    getLicense,
+    getLicenseStatusMessage,
+    isLicenseActive,
+    maskLicenseKey,
+    validateLicense,
+    type LicenseData,
 } from "@/lib/license-api";
 import { openUrl } from "@/lib/utils";
 import {
-  AlertCircle,
-  ArrowLeft,
-  Check,
-  Clock,
-  ExternalLink,
-  Key,
-  Loader2,
-  RefreshCw,
-  Shield,
-  ShieldCheck,
-  ShieldX,
-  Sparkles,
-  Trash2,
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    Clock,
+    ExternalLink,
+    Heart,
+    Key,
+    Loader2,
+    RefreshCw,
+    Shield,
+    ShieldCheck,
+    ShieldX,
+    Sparkles,
+    Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -48,6 +50,7 @@ interface LicenseViewProps {
 
 export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
   const [license, setLicense] = useState<LicenseData | null>(null);
+  const [isLinuxFree, setIsLinuxFree] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isActivating, setIsActivating] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -119,9 +122,19 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
     setIsLoading(true);
     setError(null);
     try {
+      // Check if Linux free tier
+      const deviceInfo = await getDeviceInfo();
+      setIsLinuxFree(deviceInfo.is_free_tier === true || deviceInfo.os === "linux");
+      
       const data = await getLicense();
       setLicense(data);
-      onLicenseChange?.(data.is_activated && data.status === "active");
+      
+      // Linux users always have valid access
+      if (deviceInfo.is_free_tier || deviceInfo.os === "linux") {
+        onLicenseChange?.(true);
+      } else {
+        onLicenseChange?.(data.is_activated && data.status === "active");
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load license";
       toastError("Failed to load license", msg);
@@ -209,9 +222,10 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
     }
   };
 
-  const isActive = license ? isLicenseActive(license.status) : false;
-  const isTrial = license?.status === "trial";
-  const isTrialExpired = license?.status === "trial_expired";
+  // Linux users are always active (free tier)
+  const isActive = isLinuxFree || (license ? isLicenseActive(license.status) : false);
+  const isTrial = !isLinuxFree && license?.status === "trial";
+  const isTrialExpired = !isLinuxFree && license?.status === "trial_expired";
   const trialDaysRemaining = license?.trial_days_remaining;
 
   return (
@@ -245,6 +259,27 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
           </div>
         ) : (
           <>
+            {/* Linux Free Tier Banner */}
+            {isLinuxFree && (
+              <div className="glass-card p-4 rounded-2xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-green-500/20">
+                    <Heart className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-sm text-green-700 dark:text-green-300">
+                      Free Forever on Linux! 🐧
+                    </h3>
+                    <p className="text-xs text-green-600/80 dark:text-green-400/80 mt-0.5">
+                      WaveType is completely free for Linux users. No license required, no trial limits.
+                      Thank you for supporting open source!
+                    </p>
+                  </div>
+                  <ShieldCheck className="h-6 w-6 text-green-500" />
+                </div>
+              </div>
+            )}
+
             {/* Status Card */}
             <div className="glass-card p-4 rounded-2xl">
               <div className="flex items-center justify-between mb-4">
@@ -256,7 +291,12 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     License Status
                   </h2>
                 </div>
-                {isTrial ? (
+                {isLinuxFree ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
+                    <Heart className="h-3.5 w-3.5" />
+                    Free Forever
+                  </span>
+                ) : isTrial ? (
                   <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
                     <Clock className="h-3.5 w-3.5" />
                     Trial

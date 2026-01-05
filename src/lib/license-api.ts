@@ -1,5 +1,6 @@
 /**
  * License API - Polar.sh License Key Management with Trial Support
+ * Note: Linux users have free access forever - no license required!
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -113,8 +114,16 @@ export async function canUseApp(): Promise<{
   canUse: boolean;
   reason: "licensed" | "trial" | "trial_expired" | "no_license";
   daysRemaining?: number;
+  isLinuxFree?: boolean;
 }> {
   return await invoke("can_use_app");
+}
+
+/**
+ * Check if the current platform has free access (Linux)
+ */
+export async function isPlatformFree(): Promise<boolean> {
+  return await invoke<boolean>("is_platform_free");
 }
 
 /**
@@ -125,6 +134,7 @@ export interface DeviceInfo {
   device_label: string;
   os: string;
   arch: string;
+  is_free_tier?: boolean;
 }
 
 export async function getDeviceInfo(): Promise<DeviceInfo> {

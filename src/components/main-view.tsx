@@ -1,5 +1,6 @@
 import { Logo } from "@/components/logo";
 import { useToast } from "@/hooks/use-toast";
+import { isPlatformFree } from "@/lib/license-api";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
@@ -22,11 +23,13 @@ import {
     AlertCircle,
     Clock,
     FileAudio,
+    Heart,
     History,
     Key,
     Loader2,
     Mic,
     Settings,
+    ShieldCheck,
 } from "lucide-react";
 import {
     lazy,
@@ -85,6 +88,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showTranscribe, setShowTranscribe] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
+  const [isLinuxFree, setIsLinuxFree] = useState(false);
 
   // Refs to track recording state for hotkey handlers
   const recordingStatusRef = useRef(recordingStatus);
@@ -108,6 +112,11 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  // Check if user is on Linux (free tier)
+  useEffect(() => {
+    isPlatformFree().then(setIsLinuxFree).catch(console.error);
+  }, []);
 
   const currentHotkey =
     settings.hotkeyMode === "push-to-talk"
@@ -526,13 +535,15 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
           >
             <History className="h-4 w-4 text-foreground/70" />
           </button>
-          <button
-            className="glass-button h-9 w-9 flex items-center justify-center"
-            onClick={() => setShowLicense(true)}
-            title="License"
-          >
-            <Key className="h-4 w-4 text-foreground/70" />
-          </button>
+          {!isLinuxFree && (
+            <button
+              className="glass-button h-9 w-9 flex items-center justify-center"
+              onClick={() => setShowLicense(true)}
+              title="License"
+            >
+              <Key className="h-4 w-4 text-foreground/70" />
+            </button>
+          )}
           <button
             className="glass-button h-9 w-9 flex items-center justify-center"
             onClick={() => setShowSettings(true)}
@@ -543,8 +554,23 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         </div>
       </div>
 
+      {/* Linux Free Tier Banner */}
+      {isLinuxFree && (
+        <div className="relative z-10 mx-6 mt-4">
+          <div className="glass-card px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
+            <div className="flex items-center gap-2.5">
+              <Heart className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                Free Forever on Linux! 🐧
+              </span>
+            </div>
+            <ShieldCheck className="h-4 w-4 text-green-500" />
+          </div>
+        </div>
+      )}
+
       {/* Trial banner */}
-      {trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
+      {!isLinuxFree && trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
         <div className="relative z-10 mx-6 mt-4">
           <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-2.5">

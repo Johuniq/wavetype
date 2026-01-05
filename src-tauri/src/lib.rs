@@ -1145,28 +1145,38 @@ fn clear_stored_license(db: State<DbState>) -> CommandResult<()> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerState>) -> bool {
-    // First check with license manager (secure cache)
-    if license_manager.0.is_valid() {
+    // Linux users get free access forever
+    #[cfg(target_os = "linux")]
+    {
         return true;
     }
+    
+    #[cfg(not(target_os = "linux"))]
+    {
+        // First check with license manager (secure cache)
+        if license_manager.0.is_valid() {
+            return true;
+        }
 
-    // Fall back to database for trial check
-    if let Ok(license) = db.0.get_license() {
-        // Check trial status
-        if license.status == "trial" {
-            if let Some(trial_started) = &license.trial_started_at {
-                if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-                    let now = chrono::Utc::now();
-                    let days_since_start =
-                        (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                    return days_since_start < 7;
+        // Fall back to database for trial check
+        if let Ok(license) = db.0.get_license() {
+            // Check trial status
+            if license.status == "trial" {
+                if let Some(trial_started) = &license.trial_started_at {
+                    if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
+                        let now = chrono::Utc::now();
+                        let days_since_start =
+                            (now - start_date.with_timezone(&chrono::Utc)).num_days();
+                        return days_since_start < 7;
+                    }
                 }
             }
         }
-    }
 
-    false
+        false
+    }
 }
 
 #[tauri::command]
@@ -1221,90 +1231,127 @@ fn get_device_info() -> serde_json::Value {
         "device_label": get_device_label(),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "is_free_tier": cfg!(target_os = "linux"),
     })
 }
 
+/// Check if the current platform has free access (Linux)
 #[tauri::command]
-fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
-    let license = db.0.get_license().map_err(CommandError::Database)?;
+fn is_platform_free() -> bool {
+    cfg!(target_os = "linux")
+}
 
-    // Check for active license first
-    if license.is_activated && license.status == "active" {
+#[tauri::command]
+#[allow(unused_variables)]
+fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
+    // Linux users are always free
+    #[cfg(target_os = "linux")]
+    {
         return Ok(serde_json::json!({
             "isInTrial": false,
             "daysRemaining": 0,
             "trialExpired": false,
-            "hasLicense": true
+            "hasLicense": true,
+            "isLinuxFree": true
         }));
     }
+    
+    #[cfg(not(target_os = "linux"))]
+    {
+        let license = db.0.get_license().map_err(CommandError::Database)?;
 
-    // Check trial status
-    if let Some(trial_started) = &license.trial_started_at {
-        if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-            let now = chrono::Utc::now();
-            let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-            let days_remaining = (7 - days_since_start).max(0);
-
+        // Check for active license first
+        if license.is_activated && license.status == "active" {
             return Ok(serde_json::json!({
-                "isInTrial": days_remaining > 0,
-                "daysRemaining": days_remaining,
-                "trialExpired": days_remaining <= 0,
-                "hasLicense": false
+                "isInTrial": false,
+                "daysRemaining": 0,
+                "trialExpired": false,
+                "hasLicense": true
             }));
         }
-    }
+        // Check trial status
+        if let Some(trial_started) = &license.trial_started_at {
+            if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
+                let now = chrono::Utc::now();
+                let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+                let days_remaining = (7 - days_since_start).max(0);
 
-    // No trial started
-    Ok(serde_json::json!({
-        "isInTrial": false,
-        "daysRemaining": 0,
-        "trialExpired": false,
-        "hasLicense": false
-    }))
-}
-
-#[tauri::command]
-fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
-    let license = db.0.get_license().map_err(CommandError::Database)?;
-
-    // Check for active license
-    if license.is_activated && license.status == "active" {
-        return Ok(serde_json::json!({
-            "canUse": true,
-            "reason": "licensed",
-            "daysRemaining": null
-        }));
-    }
-
-    // Check trial status
-    if let Some(trial_started) = &license.trial_started_at {
-        if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-            let now = chrono::Utc::now();
-            let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-            let days_remaining = (7 - days_since_start).max(0);
-
-            if days_remaining > 0 {
                 return Ok(serde_json::json!({
-                    "canUse": true,
-                    "reason": "trial",
-                    "daysRemaining": days_remaining
-                }));
-            } else {
-                return Ok(serde_json::json!({
-                    "canUse": false,
-                    "reason": "trial_expired",
-                    "daysRemaining": 0
+                    "isInTrial": days_remaining > 0,
+                    "daysRemaining": days_remaining,
+                    "trialExpired": days_remaining <= 0,
+                    "hasLicense": false
                 }));
             }
         }
-    }
 
-    // No license and no trial
-    Ok(serde_json::json!({
-        "canUse": false,
-        "reason": "no_license",
-        "daysRemaining": null
-    }))
+        // No trial started
+        Ok(serde_json::json!({
+            "isInTrial": false,
+            "daysRemaining": 0,
+            "trialExpired": false,
+            "hasLicense": false
+        }))
+    }
+}
+
+#[tauri::command]
+#[allow(unused_variables)]
+fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
+    // Linux users get free access forever - no license required
+    #[cfg(target_os = "linux")]
+    {
+        return Ok(serde_json::json!({
+            "canUse": true,
+            "reason": "licensed",
+            "daysRemaining": null,
+            "isLinuxFree": true
+        }));
+    }
+    
+    #[cfg(not(target_os = "linux"))]
+    {
+        let license = db.0.get_license().map_err(CommandError::Database)?;
+
+        // Check for active license
+        if license.is_activated && license.status == "active" {
+            return Ok(serde_json::json!({
+                "canUse": true,
+                "reason": "licensed",
+                "daysRemaining": null
+            }));
+        }
+
+        // Check trial status
+        if let Some(trial_started) = &license.trial_started_at {
+            if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
+                let now = chrono::Utc::now();
+                let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+                let days_remaining = (7 - days_since_start).max(0);
+
+                if days_remaining > 0 {
+                    return Ok(serde_json::json!({
+                        "canUse": true,
+                        "reason": "trial",
+                        "daysRemaining": days_remaining
+                    }));
+                } else {
+                    return Ok(serde_json::json!({
+                        "canUse": false,
+                        "reason": "trial_expired",
+                        "daysRemaining": 0
+                    }));
+                }
+            }
+        }
+
+        // No license and no trial
+        Ok(serde_json::json!({
+            "canUse": false,
+            "reason": "no_license",
+            "daysRemaining": null
+        }))
+    }
 }
 
 // ==================== Utility Commands ====================
@@ -1787,6 +1834,7 @@ pub fn run() {
             start_trial,
             get_trial_status,
             get_device_info,
+            is_platform_free,
             can_use_app,
             // Utility
             get_app_data_dir,
