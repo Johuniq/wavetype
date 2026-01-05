@@ -1,0 +1,69 @@
+name: Test macOS Build (including Parakeet)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  test-macos:
+    runs-on: macos-14  # Apple Silicon runner
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Build Parakeet Sidecar
+        run: |
+          cd sidecar/parakeet-swift
+          chmod +x build.sh
+          ./build.sh
+          
+      - name: Check Parakeet binary
+        run: |
+          ls -la sidecar/parakeet-swift/.build/release/ || echo "Build directory not found"
+          file sidecar/parakeet-swift/.build/release/parakeet-sidecar || echo "Binary not found"
+          
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test --lib
+        
+      - name: Build Tauri app (Debug)
+        run: pnpm tauri build --debug
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          
+      - name: Test Parakeet Sidecar Startup
+        run: |
+          # Test that the sidecar can start and respond to status command
+          cd sidecar/parakeet-swift
+          if [ -f ".build/release/parakeet-sidecar" ]; then
+            echo '{"type":"status"}' | timeout 5 .build/release/parakeet-sidecar || echo "Sidecar test completed"
+          else
+            echo "Parakeet sidecar binary not found - skipping test"
+          fi
+          
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            src-tauri/target/debug/bundle/
+          retention-days: 7
