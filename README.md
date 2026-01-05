@@ -1,8 +1,12 @@
 # WaveType
 
-WaveType is a desktop voice-to-text application that runs locally on Windows and macOS. It provides fast, private transcription using local AI models, keyboard shortcuts for quick capture, and tools for managing transcription history. The project focuses on privacy, offline processing, and a streamlined user experience.
+WaveType is a desktop voice-to-text application that runs locally on Windows, macOS, and Linux. It provides fast, private transcription using local AI models, keyboard shortcuts for quick capture, and tools for managing transcription history. The project focuses on privacy, offline processing, and a streamlined user experience.
 
-License: Proprietary (All rights reserved)
+## 🐧 Free Forever on Linux!
+
+**WaveType is completely free for Linux users** — no license required, no trial limits, no restrictions. This is our way of giving back to the open-source community that makes projects like this possible. Thank you for your support! ❤️
+
+License: Proprietary (All rights reserved) | **Free for Linux users**
 
 ---
 
@@ -13,11 +17,15 @@ License: Proprietary (All rights reserved)
 - File transcription for common audio formats (WAV, MP3, M4A, OGG, FLAC)
 - History and export/import of transcriptions and settings
 - Configurable models, language, and hotkey behavior
+- 🍎 **macOS**: Parakeet support (Apple's on-device speech recognition)
 
 ## Supported Platforms
 
-- Windows (NSIS, MSI)
-- macOS (DMG, .app)
+| Platform | Formats | License |
+|----------|---------|---------|
+| 🐧 Linux | AppImage, DEB, RPM | **Free Forever** |
+| 🪟 Windows | NSIS, MSI | Paid (with trial) |
+| 🍎 macOS | DMG, .app | Paid (with trial) |
 
 **Note:** See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed installation instructions, including how to handle security warnings on macOS and Windows.
 
@@ -39,6 +47,7 @@ Recording modes
 
 Settings and history are stored locally in an SQLite database in the platform's application data directory. Example locations:
 
+- Linux: `~/.local/share/com.johuniq.WaveType/`
 - Windows: `%APPDATA%/com.johuniq.WaveType/`
 - macOS: `~/Library/Application Support/com.johuniq.WaveType/`
 
