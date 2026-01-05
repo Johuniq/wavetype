@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "ParakeetSidecar",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.6.1")
