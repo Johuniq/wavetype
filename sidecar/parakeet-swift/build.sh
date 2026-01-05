@@ -13,36 +13,50 @@ echo "🔨 Building Swift Parakeet Sidecar..."
 BUILD_CONFIG="release"
 echo "📦 Build configuration: $BUILD_CONFIG"
 
-# Clean previous builds
-echo "🧹 Cleaning previous builds..."
-rm -rf "$SCRIPT_DIR/.build"
-
-# Build Swift package
-echo "🏗️  Compiling Swift package..."
-cd "$SCRIPT_DIR"
-swift build -c "$BUILD_CONFIG"
-
-# Create dist directory
-mkdir -p "$DIST_DIR"
-
-# Determine Rust target triple (Tauri expects this format)
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-    ARCH="aarch64"
+# Determine target architecture - can be overridden by TAURI_ENV_TARGET_TRIPLE
+# or parsed from Rust's target triple format
+if [ -n "$TAURI_ENV_TARGET_TRIPLE" ]; then
+    # Extract arch from Tauri's target triple (e.g., x86_64-apple-darwin -> x86_64)
+    TARGET_ARCH=$(echo "$TAURI_ENV_TARGET_TRIPLE" | cut -d'-' -f1)
+    TARGET_TRIPLE="$TAURI_ENV_TARGET_TRIPLE"
+    echo "🎯 Building for Tauri target: $TARGET_TRIPLE"
+else
+    # Default to host architecture
+    TARGET_ARCH=$(uname -m)
+    if [ "$TARGET_ARCH" = "arm64" ]; then
+        TARGET_ARCH="aarch64"
+    fi
+    TARGET_TRIPLE="${TARGET_ARCH}-apple-darwin"
+    echo "🖥️  Building for host: $TARGET_TRIPLE"
 fi
 
-# Map to Rust target triple
-case "$(uname -s)" in
-    Darwin)
-        TARGET_TRIPLE="${ARCH}-apple-darwin"
+# Map architecture to Swift's --arch flag
+case "$TARGET_ARCH" in
+    x86_64)
+        SWIFT_ARCH="x86_64"
+        ;;
+    aarch64|arm64)
+        SWIFT_ARCH="arm64"
         ;;
     *)
-        echo "❌ Unsupported platform: $(uname -s). Parakeet sidecar is macOS only."
+        echo "❌ Unsupported architecture: $TARGET_ARCH"
         exit 1
         ;;
 esac
 
-echo "🖥️  Target triple: $TARGET_TRIPLE"
+echo "🏗️  Target architecture: $SWIFT_ARCH"
+
+# Clean previous builds
+echo "🧹 Cleaning previous builds..."
+rm -rf "$SCRIPT_DIR/.build"
+
+# Build Swift package with explicit architecture
+echo "🏗️  Compiling Swift package for $SWIFT_ARCH..."
+cd "$SCRIPT_DIR"
+swift build -c "$BUILD_CONFIG" --arch "$SWIFT_ARCH"
+
+# Create dist directory
+mkdir -p "$DIST_DIR"
 
 # Copy binary with correct name for Tauri
 BUILD_PATH=".build/release/ParakeetSidecar"
