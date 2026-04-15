@@ -8,8 +8,7 @@ import {
     type DownloadProgress,
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
-import { WHISPER_MODELS, type WhisperModel } from "@/types";
-import { platform } from "@tauri-apps/plugin-os";
+import { ALL_MODELS, type WhisperModel } from "@/types";
 import { Check, Download, HardDrive, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -32,18 +31,12 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
   // Get models from database, fallback to static list
   const dbModels = useAvailableModels();
   const models: WhisperModel[] =
-    dbModels.length > 0 ? dbModels : WHISPER_MODELS;
+    dbModels.length > 0 ? dbModels : ALL_MODELS;
 
   const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
     null
   );
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [currentPlatform, setCurrentPlatform] = useState<string>("");
-
-  useEffect(() => {
-    setCurrentPlatform(platform());
-  }, []);
-
   // Listen for download progress events
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -149,14 +142,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
             onValueChange={handleSelectModel}
             className="space-y-2"
           >
-            {models
-              .filter((model) => {
-                if (model.id.startsWith("parakeet-")) {
-                  return currentPlatform === "macos";
-                }
-                return true;
-              })
-              .map((model: WhisperModel) => {
+            {models.map((model: WhisperModel) => {
               const isSelected = selectedModel?.id === model.id;
               const isThisDownloading = downloadingModelId === model.id;
 

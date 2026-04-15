@@ -241,8 +241,14 @@ impl Database {
         let _ = conn.execute("ALTER TABLE license ADD COLUMN trial_started_at TEXT", []);
 
         // Migration: add usage and validations columns if they don't exist
-        let _ = conn.execute("ALTER TABLE license ADD COLUMN usage INTEGER NOT NULL DEFAULT 0", []);
-        let _ = conn.execute("ALTER TABLE license ADD COLUMN validations INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute(
+            "ALTER TABLE license ADD COLUMN usage INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE license ADD COLUMN validations INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
 
         Ok(())
     }
@@ -375,29 +381,34 @@ impl Database {
                 "Latest distilled model. Excellent performance.",
                 "[\"en\"]",
             ),
-            // Parakeet models (macOS only)
             (
                 "parakeet-v3",
-                "🐦 Parakeet v3 (TDT)",
-                "500 MB",
-                500_i64 * 1024 * 1024,
-                "Ultra-fast NVIDIA Parakeet model. Optimized for Apple Neural Engine.",
+                "Parakeet v3 ONNX",
+                "670 MB",
+                670_i64 * 1024 * 1024,
+                "Fast Parakeet TDT model through ONNX Runtime.",
                 "[\"en\"]",
             ),
             (
                 "parakeet-v2",
-                "🐦 Parakeet v2 (TDT)",
-                "500 MB",
-                500_i64 * 1024 * 1024,
-                "Previous generation Parakeet model. Very fast and accurate.",
+                "Parakeet v2 ONNX",
+                "661 MB",
+                661_i64 * 1024 * 1024,
+                "Previous Parakeet TDT generation through ONNX Runtime.",
                 "[\"en\"]",
             ),
         ];
 
         for (id, name, size, size_bytes, description, languages) in models {
             conn.execute(
-                "INSERT OR IGNORE INTO models (id, name, size, size_bytes, description, languages)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO models (id, name, size, size_bytes, description, languages)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    size = excluded.size,
+                    size_bytes = excluded.size_bytes,
+                    description = excluded.description,
+                    languages = excluded.languages",
                 params![id, name, size, size_bytes, description, languages],
             )?;
         }

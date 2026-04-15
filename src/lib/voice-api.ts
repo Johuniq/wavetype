@@ -61,13 +61,6 @@ export async function loadModel(
   modelId: string,
   language: string = "en"
 ): Promise<void> {
-  if (modelId.startsWith("parakeet-")) {
-    const { startParakeet, loadParakeetModel } = await import("./parakeet-api");
-    await startParakeet();
-    const version = modelId.includes("v2") ? "v2" : "v3";
-    await loadParakeetModel(version, true); // true to auto-download if needed
-    return;
-  }
   await invoke("load_model", { modelId, language });
 }
 
@@ -95,28 +88,10 @@ export async function transcribeFile(
 // ============================================
 
 export async function downloadModel(modelId: string): Promise<string> {
-  if (modelId.startsWith("parakeet-")) {
-    const { startParakeet, loadParakeetModel } = await import("./parakeet-api");
-    await startParakeet();
-    const version = modelId.includes("v2") ? "v2" : "v3";
-    await loadParakeetModel(version, true); // true to force download
-    return "downloading";
-  }
   return await invoke<string>("download_model", { modelId });
 }
 
 export async function deleteModel(modelId: string): Promise<void> {
-  if (modelId.startsWith("parakeet-")) {
-    const { startParakeet, sendParakeetCommand } = await import("./parakeet-api");
-    await startParakeet();
-    await sendParakeetCommand({
-      type: "delete_model",
-      model_version: modelId.includes("v2") ? "v2" : "v3",
-    });
-    // Also update database state via Tauri command
-    await invoke("delete_model", { modelId });
-    return;
-  }
   await invoke("delete_model", { modelId });
 }
 
@@ -197,7 +172,7 @@ export interface VoiceToTextOptions {
  */
 export async function completeVoiceToText(
   options: VoiceToTextOptions = {},
-  selectedModelId?: string
+  _selectedModelId?: string
 ): Promise<string | null> {
   try {
     options.onRecordingStop?.();
@@ -205,40 +180,7 @@ export async function completeVoiceToText(
 
     let text = "";
 
-    // Check if we are using a Parakeet model
-    if (selectedModelId?.startsWith("parakeet-")) {
-      const samples = await stopRecording();
-      const tempPath = await saveTempAudio(samples);
-      
-      // For Parakeet, we use the sidecar API which is async via events
-      // We'll return a promise that resolves when the event is received
-      const { sendParakeetCommand, onParakeetResponse } = await import("./parakeet-api");
-      
-      text = await new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Transcription timed out")), 30000);
-        
-        onParakeetResponse((res) => {
-          if (res.type === "transcription" && res.text !== undefined) {
-            clearTimeout(timeout);
-            resolve(res.text);
-          } else if (res.type === "error") {
-            clearTimeout(timeout);
-            reject(new Error(res.message || "Parakeet transcription failed"));
-          }
-        }).then((unlisten) => {
-          sendParakeetCommand({
-            type: "transcribe",
-            audio_path: tempPath,
-          }).catch((err) => {
-            unlisten();
-            reject(err);
-          });
-        });
-      });
-    } else {
-      // Standard Whisper flow
-      text = await recordAndTranscribe();
-    }
+    text = await recordAndTranscribe();
 
     // Apply post-processing if enabled
     if (options.enablePostProcessing && text) {

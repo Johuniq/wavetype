@@ -1,12 +1,45 @@
 use std::path::Path;
+use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
+use transcribe_rs::onnx::Quantization;
+use transcribe_rs::TranscriptionResult;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-pub struct Transcriber {
+pub enum Transcriber {
+    Whisper(WhisperTranscriber),
+    Parakeet(ParakeetTranscriber),
+}
+
+impl Transcriber {
+    pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
+        if model_id.starts_with("parakeet-") {
+            Ok(Self::Parakeet(ParakeetTranscriber::new(model_path)?))
+        } else {
+            Ok(Self::Whisper(WhisperTranscriber::new(
+                model_path, language,
+            )?))
+        }
+    }
+
+    pub fn transcribe(&mut self, audio_samples: &[f32]) -> Result<String, String> {
+        match self {
+            Self::Whisper(transcriber) => transcriber.transcribe(audio_samples),
+            Self::Parakeet(transcriber) => transcriber.transcribe(audio_samples),
+        }
+    }
+
+    pub fn set_language(&mut self, language: &str) {
+        if let Self::Whisper(transcriber) = self {
+            transcriber.set_language(language);
+        }
+    }
+}
+
+pub struct WhisperTranscriber {
     ctx: WhisperContext,
     language: String,
 }
 
-impl Transcriber {
+impl WhisperTranscriber {
     pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
         if !Path::new(model_path).exists() {
             return Err(format!("Model file not found: {}", model_path));
@@ -14,14 +47,14 @@ impl Transcriber {
 
         // Configure context parameters for maximum speed
         let mut ctx_params = WhisperContextParameters::default();
-        
+
         // Enable flash attention for faster inference (CPU-only optimization)
         // Flash attention reduces memory bandwidth and speeds up attention computation
         ctx_params.flash_attn(true);
-        
+
         // GPU is handled via compile-time features (metal on macOS, cuda/vulkan on others)
         // The default will use GPU if the feature is enabled
-        
+
         let ctx = WhisperContext::new_with_params(model_path, ctx_params)
             .map_err(|e| format!("Failed to load Whisper model: {}", e))?;
 
@@ -67,7 +100,7 @@ impl Transcriber {
 
         // Suppress non-speech tokens for cleaner, faster output
         params.set_suppress_blank(true);
-        params.set_suppress_non_speech_tokens(true);
+        params.set_suppress_nst(true);
 
         // Reduced max tokens - voice input is typically short
         params.set_max_tokens(64);
@@ -105,20 +138,22 @@ impl Transcriber {
             .map_err(|e| format!("Transcription failed: {}", e))?;
 
         // Collect all segments efficiently
-        let num_segments = state
-            .full_n_segments()
-            .map_err(|e| format!("Failed to get segments: {}", e))?;
+        let num_segments = state.full_n_segments();
 
         // Pre-allocate string capacity for typical transcription length
         // Average word is ~5 chars, so 128 chars is a reasonable estimate
         let mut result = String::with_capacity((num_segments as usize).saturating_mul(128));
         for i in 0..num_segments {
-            if let Ok(segment) = state.full_get_segment_text(i) {
-                if !segment.trim().is_empty() {
+            if let Some(segment) = state.get_segment(i) {
+                let text = segment
+                    .to_str_lossy()
+                    .map_err(|e| format!("Failed to get segment text: {}", e))?;
+                let text = text.trim();
+                if !text.is_empty() {
                     if !result.is_empty() {
                         result.push(' ');
                     }
-                    result.push_str(&segment);
+                    result.push_str(text);
                 }
             }
         }
@@ -128,6 +163,46 @@ impl Transcriber {
 
     pub fn set_language(&mut self, language: &str) {
         self.language = language.to_string();
+    }
+}
+
+pub struct ParakeetTranscriber {
+    model: ParakeetModel,
+}
+
+impl ParakeetTranscriber {
+    pub fn new(model_path: &str) -> Result<Self, String> {
+        let model_dir = Path::new(model_path);
+        if !model_dir.is_dir() {
+            return Err(format!(
+                "Parakeet model directory not found: {}",
+                model_path
+            ));
+        }
+
+        let model = ParakeetModel::load(model_dir, &Quantization::Int8)
+            .map_err(|e| format!("Failed to load Parakeet ONNX model: {}", e))?;
+
+        Ok(Self { model })
+    }
+
+    pub fn transcribe(&mut self, audio_samples: &[f32]) -> Result<String, String> {
+        if audio_samples.is_empty() {
+            return Err("No audio samples to transcribe".to_string());
+        }
+
+        let result: TranscriptionResult = self
+            .model
+            .transcribe_with(
+                audio_samples,
+                &ParakeetParams {
+                    language: Some("en".to_string()),
+                    timestamp_granularity: Some(TimestampGranularity::Segment),
+                },
+            )
+            .map_err(|e| format!("Parakeet transcription failed: {}", e))?;
+
+        Ok(result.text)
     }
 }
 
@@ -177,8 +252,85 @@ pub fn get_model_url(model_id: &str) -> Option<String> {
     }
 }
 
+pub struct ParakeetFile {
+    pub filename: &'static str,
+    pub url: &'static str,
+}
+
+pub fn get_parakeet_files(model_id: &str) -> Option<&'static [ParakeetFile]> {
+    const V3_FILES: &[ParakeetFile] = &[
+        ParakeetFile {
+            filename: "encoder-model.int8.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main",
+                "/encoder-model.int8.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "decoder_joint-model.int8.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main",
+                "/decoder_joint-model.int8.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "nemo128.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main",
+                "/nemo128.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "vocab.txt",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main",
+                "/vocab.txt"
+            ),
+        },
+    ];
+
+    const V2_FILES: &[ParakeetFile] = &[
+        ParakeetFile {
+            filename: "encoder-model.int8.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main",
+                "/encoder-model.int8.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "decoder_joint-model.int8.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main",
+                "/decoder_joint-model.int8.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "nemo128.onnx",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main",
+                "/nemo128.onnx"
+            ),
+        },
+        ParakeetFile {
+            filename: "vocab.txt",
+            url: concat!(
+                "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main",
+                "/vocab.txt"
+            ),
+        },
+    ];
+
+    match model_id {
+        "parakeet-v3" => Some(V3_FILES),
+        "parakeet-v2" => Some(V2_FILES),
+        _ => None,
+    }
+}
+
 pub fn get_model_filename(model_id: &str) -> String {
     match model_id {
+        "parakeet-v3" => "parakeet-tdt-0.6b-v3-int8".to_string(),
+        "parakeet-v2" => "parakeet-tdt-0.6b-v2-int8".to_string(),
         // Distil models have different naming
         "distil-small.en" => "ggml-distil-small.en.bin".to_string(),
         "distil-medium.en" => "ggml-distil-medium.en.bin".to_string(),

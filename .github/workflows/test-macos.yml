@@ -1,4 +1,4 @@
-name: Test macOS Build (including Parakeet)
+name: Test macOS Build
 
 on:
   push:
@@ -30,17 +30,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         
-      - name: Build Parakeet Sidecar
-        run: |
-          cd sidecar/parakeet-swift
-          chmod +x build.sh
-          ./build.sh
-          
-      - name: Check Parakeet binary
-        run: |
-          ls -la sidecar/parakeet-swift/.build/release/ || echo "Build directory not found"
-          file sidecar/parakeet-swift/.build/release/parakeet-sidecar || echo "Binary not found"
-          
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --lib
@@ -49,16 +38,6 @@ jobs:
         run: pnpm tauri build --debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
-          
-      - name: Test Parakeet Sidecar Startup
-        run: |
-          # Test that the sidecar can start and respond to status command
-          cd sidecar/parakeet-swift
-          if [ -f ".build/release/parakeet-sidecar" ]; then
-            echo '{"type":"status"}' | timeout 5 .build/release/parakeet-sidecar || echo "Sidecar test completed"
-          else
-            echo "Parakeet sidecar binary not found - skipping test"
-          fi
           
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

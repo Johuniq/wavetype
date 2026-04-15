@@ -24,7 +24,6 @@ import {
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
 import type { WhisperModel } from "@/types";
-import { platform } from "@tauri-apps/plugin-os";
 import {
     ArrowLeft,
     Check,
@@ -82,12 +81,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   } | null>(null);
   const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
   const [recordingToggle, setRecordingToggle] = useState(false);
-  const [currentPlatform, setCurrentPlatform] = useState<string>("");
-
-  useEffect(() => {
-    setCurrentPlatform(platform());
-  }, []);
-
   // Load storage stats
   useEffect(() => {
     getStorageStats().then(setStorageStats).catch(console.error);
@@ -360,14 +353,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           </div>
 
           <div className="space-y-2">
-            {availableModels
-              .filter((model) => {
-                if (model.id.startsWith("parakeet-")) {
-                  return currentPlatform === "macos";
-                }
-                return true;
-              })
-              .map((model) => (
+            {availableModels.map((model) => (
               <div
                 key={model.id}
                 className={cn(

@@ -9,8 +9,6 @@ mod post_process;
 mod security;
 mod text_inject;
 mod transcription;
-#[cfg(target_os = "macos")]
-mod parakeet;
 
 use audio::AudioRecorder;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
@@ -31,8 +29,6 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use transcription::Transcriber;
-#[cfg(target_os = "macos")]
-use parakeet::{ParakeetState, ParakeetSidecar, start_parakeet, send_parakeet_command};
 
 // Application version from Cargo.toml
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -100,18 +96,25 @@ fn sanitize_path(path: &str) -> Result<String, String> {
         }
     }
     // Handle Windows paths (drive letters like C:, D:, etc.)
-    else if normalized.len() >= 2 
-        && normalized.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+    else if normalized.len() >= 2
+        && normalized
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic())
+            .unwrap_or(false)
         && normalized.chars().nth(1) == Some(':')
     {
         // Windows absolute path - allow if it contains WaveType or is in user directories
         // Note: Windows paths are typically handled by Tauri's path helpers,
         // but we validate here as an extra safety measure
-        if !normalized.contains("WaveType") 
+        if !normalized.contains("WaveType")
             && !normalized.contains("AppData")
             && !normalized.contains("Users")
         {
-            warn!("Access to restricted Windows path attempted: {}", normalized);
+            warn!(
+                "Access to restricted Windows path attempted: {}",
+                normalized
+            );
             return Err("Invalid path: outside allowed directories".to_string());
         }
     }
@@ -291,20 +294,27 @@ fn stop_recording(recorder: State<RecorderState>) -> CommandResult<Vec<f32>> {
             CommandError::Recording(e)
         })
     } else {
-        Err(CommandError::Recording("No recorder initialized".to_string()))
+        Err(CommandError::Recording(
+            "No recorder initialized".to_string(),
+        ))
     }
 }
 
 #[tauri::command]
 fn save_temp_audio(app: tauri::AppHandle, samples: Vec<f32>) -> CommandResult<String> {
-    let temp_dir = app.path().app_cache_dir().map_err(|e| CommandError::Io(std::io::Error::other(e.to_string())))?;
+    let temp_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| CommandError::Io(std::io::Error::other(e.to_string())))?;
     std::fs::create_dir_all(&temp_dir).map_err(CommandError::Io)?;
-    
+
     let file_path = temp_dir.join(format!("temp_recording_{}.wav", uuid::Uuid::new_v4()));
-    let path_str = file_path.to_str().ok_or_else(|| CommandError::Io(std::io::Error::other("Invalid path")))?;
-    
+    let path_str = file_path
+        .to_str()
+        .ok_or_else(|| CommandError::Io(std::io::Error::other("Invalid path")))?;
+
     audio::save_wav(&samples, path_str).map_err(CommandError::Recording)?;
-    
+
     Ok(path_str.to_string())
 }
 
@@ -404,7 +414,7 @@ fn load_model(
     }
 
     // Load new model
-    let new_transcriber = Transcriber::new(model_path.to_str().unwrap(), &language)
+    let new_transcriber = Transcriber::new(&model_id, model_path.to_str().unwrap(), &language)
         .map_err(CommandError::Transcription)?;
 
     let mut transcriber_guard = transcriber.0.lock().unwrap();
@@ -428,9 +438,9 @@ fn transcribe_audio(
     transcriber: State<TranscriberState>,
     audio_samples: Vec<f32>,
 ) -> CommandResult<String> {
-    let transcriber_guard = transcriber.0.lock().unwrap();
+    let mut transcriber_guard = transcriber.0.lock().unwrap();
 
-    if let Some(ref t) = *transcriber_guard {
+    if let Some(ref mut t) = *transcriber_guard {
         let text = t
             .transcribe(&audio_samples)
             .map_err(CommandError::Transcription)?;
@@ -458,8 +468,8 @@ async fn record_and_transcribe(
     };
 
     // Transcribe
-    let transcriber_guard = transcriber.0.lock().unwrap();
-    if let Some(ref t) = *transcriber_guard {
+    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    if let Some(ref mut t) = *transcriber_guard {
         let text = t
             .transcribe(&samples)
             .map_err(CommandError::Transcription)?;
@@ -526,8 +536,8 @@ async fn transcribe_file(
         .map_err(|e| CommandError::Transcription(format!("Failed to read audio file: {}", e)))?;
 
     // Transcribe
-    let transcriber_guard = transcriber.0.lock().unwrap();
-    if let Some(ref t) = *transcriber_guard {
+    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    if let Some(ref mut t) = *transcriber_guard {
         let text = t
             .transcribe(&samples)
             .map_err(CommandError::Transcription)?;
@@ -707,37 +717,47 @@ async fn delete_model(
     db: State<'_, DbState>,
     model_id: String,
 ) -> CommandResult<()> {
-    if !model_id.starts_with("parakeet-") {
-        downloader
-            .0
-            .delete_model(&model_id)
-            .await
-            .map_err(CommandError::Download)?;
-    }
+    downloader
+        .0
+        .delete_model(&model_id)
+        .await
+        .map_err(CommandError::Download)?;
     db.0.set_model_downloaded(&model_id, false, None)
         .map_err(CommandError::Database)?;
     Ok(())
 }
 
 #[tauri::command]
-fn is_model_downloaded(db: State<DbState>, downloader: State<DownloaderState>, model_id: String) -> CommandResult<bool> {
+fn is_model_downloaded(
+    _db: State<DbState>,
+    downloader: State<DownloaderState>,
+    model_id: String,
+) -> CommandResult<bool> {
     // Validate model_id against allowed values
     const VALID_MODEL_IDS: &[&str] = &[
-        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
-        "tiny.en", "base.en", "small.en", "medium.en",
-        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
-        "parakeet-v2", "parakeet-v3",
+        "tiny",
+        "base",
+        "small",
+        "medium",
+        "large",
+        "large-v3",
+        "large-v3-turbo",
+        "tiny.en",
+        "base.en",
+        "small.en",
+        "medium.en",
+        "distil-small.en",
+        "distil-medium.en",
+        "distil-large-v2",
+        "distil-large-v3",
+        "parakeet-v2",
+        "parakeet-v3",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(
             rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
         ));
     }
-    if model_id.starts_with("parakeet-") {
-        let db = db.0.get_model(&model_id).map_err(CommandError::Database)?;
-        return Ok(db.map(|m| m.downloaded).unwrap_or(false));
-    }
-
     Ok(downloader.0.is_model_downloaded(&model_id))
 }
 
@@ -750,9 +770,23 @@ fn get_downloaded_models(downloader: State<DownloaderState>) -> Vec<String> {
 fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> CommandResult<String> {
     // Validate model_id against allowed values
     const VALID_MODEL_IDS: &[&str] = &[
-        "tiny", "base", "small", "medium", "large", "large-v3", "large-v3-turbo",
-        "tiny.en", "base.en", "small.en", "medium.en",
-        "distil-small.en", "distil-medium.en", "distil-large-v2", "distil-large-v3",
+        "tiny",
+        "base",
+        "small",
+        "medium",
+        "large",
+        "large-v3",
+        "large-v3-turbo",
+        "tiny.en",
+        "base.en",
+        "small.en",
+        "medium.en",
+        "distil-small.en",
+        "distil-medium.en",
+        "distil-large-v2",
+        "distil-large-v3",
+        "parakeet-v2",
+        "parakeet-v3",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(
@@ -801,7 +835,10 @@ fn inject_text(injector: State<TextInjectorState>, text: String) -> CommandResul
 }
 
 #[tauri::command]
-fn execute_keyboard_shortcut(injector: State<TextInjectorState>, shortcut: String) -> CommandResult<()> {
+fn execute_keyboard_shortcut(
+    injector: State<TextInjectorState>,
+    shortcut: String,
+) -> CommandResult<()> {
     // Validate shortcut against allowed values
     let allowed_shortcuts = [
         "undo",
@@ -1152,7 +1189,7 @@ fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerSta
     {
         return true;
     }
-    
+
     #[cfg(not(target_os = "linux"))]
     {
         // First check with license manager (secure cache)
@@ -1255,7 +1292,7 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
             "isLinuxFree": true
         }));
     }
-    
+
     #[cfg(not(target_os = "linux"))]
     {
         let license = db.0.get_license().map_err(CommandError::Database)?;
@@ -1308,7 +1345,7 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
             "isLinuxFree": true
         }));
     }
-    
+
     #[cfg(not(target_os = "linux"))]
     {
         let license = db.0.get_license().map_err(CommandError::Database)?;
@@ -1734,17 +1771,13 @@ pub fn run() {
             app.manage(LicenseManagerState(Arc::new(LicenseManager::new())));
 
             // Initialize text injector (reused for better performance)
-            let text_injector = text_inject::TextInjector::new()
-                .expect("Failed to initialize text injector");
+            let text_injector =
+                text_inject::TextInjector::new().expect("Failed to initialize text injector");
             app.manage(TextInjectorState(Arc::new(Mutex::new(text_injector))));
 
             // Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
-
-            // Initialize Parakeet sidecar state
-            #[cfg(target_os = "macos")]
-            app.manage(ParakeetState(Arc::new(ParakeetSidecar::new())));
 
             // Setup system tray
             setup_tray(app)?;
@@ -1852,11 +1885,6 @@ pub fn run() {
             export_error_reports,
             clear_error_reports,
             load_error_reports,
-            // Parakeet (macOS only)
-            #[cfg(target_os = "macos")]
-            start_parakeet,
-            #[cfg(target_os = "macos")]
-            send_parakeet_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

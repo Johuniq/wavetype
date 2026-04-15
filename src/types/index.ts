@@ -117,9 +117,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // Model categories for UI grouping
 export type ModelCategory = "standard" | "english" | "distil" | "large";
 
-// Transcription engine types
-export type TranscriptionEngine = "whisper" | "parakeet";
-
 // Available Whisper models
 export const WHISPER_MODELS: WhisperModel[] = [
   // ========== RECOMMENDED ==========
@@ -247,23 +244,22 @@ export const WHISPER_MODELS: WhisperModel[] = [
   },
 ];
 
-// Available Parakeet models (macOS only)
 export const PARAKEET_MODELS: WhisperModel[] = [
   {
     id: "parakeet-v3",
-    name: "🐦 Parakeet v3 (TDT)",
-    size: "500 MB",
-    sizeBytes: 500 * 1024 * 1024,
-    description: "Ultra-fast NVIDIA Parakeet model. Optimized for Apple Neural Engine.",
+    name: "Parakeet v3 ONNX",
+    size: "670 MB",
+    sizeBytes: 670 * 1024 * 1024,
+    description: "Fast Parakeet TDT model through ONNX Runtime.",
     languages: ["en"],
     recommended: true,
   },
   {
     id: "parakeet-v2",
-    name: "🐦 Parakeet v2 (TDT)",
-    size: "500 MB",
-    sizeBytes: 500 * 1024 * 1024,
-    description: "Previous generation Parakeet model. Very fast and accurate.",
+    name: "Parakeet v2 ONNX",
+    size: "661 MB",
+    sizeBytes: 661 * 1024 * 1024,
+    description: "Previous Parakeet TDT generation through ONNX Runtime.",
     languages: ["en"],
   },
 ];
