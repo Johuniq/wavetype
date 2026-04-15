@@ -181,7 +181,7 @@ impl ParakeetTranscriber {
         }
 
         let model = ParakeetModel::load(model_dir, &Quantization::Int8)
-            .map_err(|e| format!("Failed to load Parakeet ONNX model: {}", e))?;
+            .map_err(|e| format!("Failed to load Parakeet transcription model: {}", e))?;
 
         Ok(Self { model })
     }

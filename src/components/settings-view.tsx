@@ -344,10 +344,10 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             </div>
             <div>
               <h2 className="font-semibold text-sm text-foreground">
-                AI Model
+                Transcription Model
               </h2>
               <p className="text-xs text-foreground/60">
-                Select and manage Whisper models
+                Select and manage transcription quality
               </p>
             </div>
           </div>

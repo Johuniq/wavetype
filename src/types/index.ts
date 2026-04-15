@@ -117,16 +117,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // Model categories for UI grouping
 export type ModelCategory = "standard" | "english" | "distil" | "large";
 
-// Available Whisper models
+// Available transcription models
 export const WHISPER_MODELS: WhisperModel[] = [
   // ========== RECOMMENDED ==========
   {
     id: "distil-medium.en",
-    name: "⚡ Distil Medium",
+    name: "Distil Whisper Medium English",
     size: "390 MB",
     sizeBytes: 390 * 1024 * 1024,
-    description:
-      "6x faster than Medium with similar accuracy. Best for real-time use.",
+    description: "Recommended English model for fast, accurate dictation.",
     languages: ["en"],
     recommended: true,
   },
@@ -134,112 +133,116 @@ export const WHISPER_MODELS: WhisperModel[] = [
   // ========== STANDARD WHISPER (Multilingual) ==========
   {
     id: "tiny",
-    name: "Tiny",
+    name: "Whisper Tiny",
     size: "75 MB",
     sizeBytes: 75 * 1024 * 1024,
-    description: "Fastest multilingual model. Good for quick notes.",
+    description:
+      "Fastest Whisper model. Best for quick notes and low-resource devices.",
     languages: ["en", "bn"],
   },
   {
     id: "base",
-    name: "Base",
+    name: "Whisper Base",
     size: "142 MB",
     sizeBytes: 142 * 1024 * 1024,
-    description: "Balanced speed and accuracy. Good starting point.",
+    description: "Balanced Whisper model for everyday transcription.",
     languages: ["en", "bn"],
   },
   {
     id: "small",
-    name: "Small",
+    name: "Whisper Small",
     size: "466 MB",
     sizeBytes: 466 * 1024 * 1024,
-    description: "Better accuracy, moderate speed. Good for longer dictation.",
+    description:
+      "Improved accuracy for longer dictation, meetings, and focused writing.",
     languages: ["en", "bn"],
   },
   {
     id: "medium",
-    name: "Medium",
+    name: "Whisper Medium",
     size: "1.5 GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
-    description: "High accuracy multilingual. Best for accuracy-critical work.",
+    description: "High-accuracy multilingual transcription for demanding audio.",
     languages: ["en", "bn"],
   },
 
   // ========== ENGLISH-ONLY (Faster) ==========
   {
     id: "tiny.en",
-    name: "Tiny English",
+    name: "Whisper Tiny English",
     size: "75 MB",
     sizeBytes: 75 * 1024 * 1024,
-    description: "Fastest English-only. Great for quick notes.",
+    description: "Fastest English-only Whisper model. Great for quick notes.",
     languages: ["en"],
   },
   {
     id: "base.en",
-    name: "Base English",
+    name: "Whisper Base English",
     size: "142 MB",
     sizeBytes: 142 * 1024 * 1024,
-    description: "Fast English-only with good accuracy.",
+    description: "Fast English-only Whisper model with good accuracy.",
     languages: ["en"],
   },
   {
     id: "small.en",
-    name: "Small English",
+    name: "Whisper Small English",
     size: "466 MB",
     sizeBytes: 466 * 1024 * 1024,
-    description: "Accurate English-only model.",
+    description: "Accurate English-only Whisper model for longer dictation.",
     languages: ["en"],
   },
   {
     id: "medium.en",
-    name: "Medium English",
+    name: "Whisper Medium English",
     size: "1.5 GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
-    description: "High accuracy English-only.",
+    description: "High-accuracy English-only Whisper model.",
     languages: ["en"],
   },
 
-  // ========== DISTIL-WHISPER (6x Faster) ==========
+  // ========== DISTIL-WHISPER (Faster) ==========
   {
     id: "distil-small.en",
-    name: "⚡ Distil Small",
+    name: "Distil Whisper Small English",
     size: "166 MB",
     sizeBytes: 166 * 1024 * 1024,
-    description: "6x faster than Small. Great for real-time transcription.",
+    description: "Fast English transcription with accuracy close to Whisper Small.",
     languages: ["en"],
   },
   {
     id: "distil-large-v2",
-    name: "⚡ Distil Large v2",
+    name: "Distil Whisper Large v2",
     size: "756 MB",
     sizeBytes: 756 * 1024 * 1024,
-    description: "Fast large model with near-equal accuracy.",
+    description: "Fast large English model with strong accuracy.",
     languages: ["en"],
   },
   {
     id: "distil-large-v3",
-    name: "⚡ Distil Large v3",
+    name: "Distil Whisper Large v3",
     size: "756 MB",
     sizeBytes: 756 * 1024 * 1024,
-    description: "Latest distilled model. Excellent performance.",
+    description:
+      "Latest Distil Whisper model with excellent English transcription quality.",
     languages: ["en"],
   },
 
   // ========== LARGE MODELS (Best Accuracy) ==========
   {
     id: "large-v3",
-    name: "Large v3",
+    name: "Whisper Large v3",
     size: "2.9 GB",
     sizeBytes: 2.9 * 1024 * 1024 * 1024,
-    description: "Highest accuracy multilingual. Professional use.",
+    description: "Highest-accuracy Whisper model for professional workflows.",
     languages: ["en", "bn"],
   },
   {
     id: "large-v3-turbo",
-    name: "Large v3 Turbo",
+    name: "Whisper Large v3 Turbo",
     size: "1.6 GB",
     sizeBytes: 1.6 * 1024 * 1024 * 1024,
-    description: "Fast large model. Great speed/accuracy balance.",
+    description:
+      "Fast large Whisper model with a strong speed and accuracy balance.",
     languages: ["en", "bn"],
   },
 ];
@@ -247,19 +250,19 @@ export const WHISPER_MODELS: WhisperModel[] = [
 export const PARAKEET_MODELS: WhisperModel[] = [
   {
     id: "parakeet-v3",
-    name: "Parakeet v3 ONNX",
+    name: "Parakeet v3",
     size: "670 MB",
     sizeBytes: 670 * 1024 * 1024,
-    description: "Fast Parakeet TDT model through ONNX Runtime.",
+    description: "Fast Parakeet English model with excellent responsiveness.",
     languages: ["en"],
     recommended: true,
   },
   {
     id: "parakeet-v2",
-    name: "Parakeet v2 ONNX",
+    name: "Parakeet v2",
     size: "661 MB",
     sizeBytes: 661 * 1024 * 1024,
-    description: "Previous Parakeet TDT generation through ONNX Runtime.",
+    description: "Previous Parakeet English model with stable transcription quality.",
     languages: ["en"],
   },
 ];

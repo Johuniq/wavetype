@@ -129,7 +129,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
             Step 2 of 3
           </p>
           <h2 className="text-lg font-semibold text-foreground">
-            Choose AI Model
+            Choose Transcription Model
           </h2>
           <p className="text-sm text-foreground/60">
             Larger models are more accurate but need more storage
