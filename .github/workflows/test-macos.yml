@@ -30,6 +30,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Setup libclang for bindgen
+        run: |
+          brew install llvm
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --lib
