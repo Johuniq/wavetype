@@ -65,7 +65,11 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev libclang-dev clang cmake
+          LIBCLANG_PATH="$(llvm-config --libdir)"
+          echo "LIBCLANG_PATH=${LIBCLANG_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LIBCLANG_PATH}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -96,6 +100,20 @@ jobs:
           brew install cmake
           CMAKE_BIN="$(command -v cmake)"
           echo "CMAKE=${CMAKE_BIN}" >> "$GITHUB_ENV"
+
+      - name: Setup CMake for native builds (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $cmake = "${env:ProgramFiles}\CMake\bin\cmake.exe"
+          if (-not (Test-Path -LiteralPath $cmake)) {
+            $cmake = (Get-Command cmake.exe -ErrorAction Stop).Source
+          }
+          if (-not (Test-Path -LiteralPath $cmake)) {
+            throw "cmake.exe not found at $cmake"
+          }
+          "CMAKE=$cmake" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $cmake --version
 
       - name: Setup ONNX Runtime for Intel macOS
         if: matrix.args == '--target x86_64-apple-darwin'
