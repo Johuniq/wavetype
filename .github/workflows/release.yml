@@ -90,6 +90,14 @@ jobs:
           echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
           echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
+      - name: Setup CMake for native builds (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew install cmake
+          CMAKE_BIN="$(command -v cmake)"
+          echo "CMAKE=${CMAKE_BIN}" >> "$GITHUB_ENV"
+          echo "CMAKE_GENERATOR=" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
         run: pnpm install
 
