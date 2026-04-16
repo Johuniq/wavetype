@@ -97,6 +97,20 @@ jobs:
           CMAKE_BIN="$(command -v cmake)"
           echo "CMAKE=${CMAKE_BIN}" >> "$GITHUB_ENV"
 
+      - name: Setup ONNX Runtime for Intel macOS
+        if: matrix.args == '--target x86_64-apple-darwin'
+        run: |
+          ORT_VERSION="1.23.2"
+          ORT_ARCHIVE="onnxruntime-osx-x86_64-${ORT_VERSION}.tgz"
+          ORT_ROOT="${RUNNER_TEMP}/onnxruntime"
+          curl -L "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "${RUNNER_TEMP}/${ORT_ARCHIVE}"
+          mkdir -p "${ORT_ROOT}"
+          tar -xzf "${RUNNER_TEMP}/${ORT_ARCHIVE}" -C "${ORT_ROOT}"
+          ORT_DIR="${ORT_ROOT}/onnxruntime-osx-x86_64-${ORT_VERSION}"
+          echo "ORT_LIB_PATH=${ORT_DIR}/lib" >> "$GITHUB_ENV"
+          echo "ORT_PREFER_DYNAMIC_LINK=1" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=${ORT_DIR}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
         run: pnpm install
 
