@@ -33,7 +33,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: `v${{ steps.version.outputs.version }}`,
-              name: `WaveType v${{ steps.version.outputs.version }}`,
+              name: `Wavee v${{ steps.version.outputs.version }}`,
               body: 'See the assets section below to download the installer for your platform.',
               draft: true,
               prerelease: false
@@ -49,11 +49,11 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin --bundles dmg"
           - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin --bundles dmg"
           - platform: "windows-latest"
-            args: ""
+            args: "--bundles nsis,msi"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -166,7 +166,7 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
-          includeUpdaterJson: true
+          includeUpdaterJson: false
 
   publish-release:
     runs-on: ubuntu-latest
@@ -176,9 +176,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
       - name: Generate release checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -186,6 +193,21 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --dir release-assets \
             --clobber
+
+          cargo install tauri-cli --version "^2" --locked
+
+          VERSION="${GITHUB_REF_NAME#v}" \
+            REQUIRE_ALL_PLATFORMS=true \
+            node scripts/generate-latest-json.mjs release-assets release-assets/latest.json
+
+          gh release upload "$GITHUB_REF_NAME" release-assets/*.sig \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          gh release upload "$GITHUB_REF_NAME" release-assets/latest.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
           cd release-assets
           sha256sum * | sort -k2 > SHA256SUMS.txt
           gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt \

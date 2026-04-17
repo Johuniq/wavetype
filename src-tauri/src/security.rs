@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 pub fn derive_encryption_key(device_id: &str) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(device_id.as_bytes());
-    hasher.update(b"wavetype-secure-v3-key-derivation");
+    hasher.update(b"wavee-secure-v3-key-derivation");
     hasher.finalize().to_vec()
 }
 

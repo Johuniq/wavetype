@@ -131,13 +131,13 @@ if [ -n "$TARGET_PLATFORM" ]; then
     print_info "Building for platform: $TARGET_PLATFORM"
     case $TARGET_PLATFORM in
         linux)
-            pnpm tauri build --target x86_64-unknown-linux-gnu
+            cargo tauri build --target x86_64-unknown-linux-gnu
             ;;
         windows)
-            pnpm tauri build --target x86_64-pc-windows-msvc
+            cargo tauri build --target x86_64-pc-windows-msvc
             ;;
         macos)
-            pnpm tauri build --target x86_64-apple-darwin
+            cargo tauri build --target x86_64-apple-darwin
             ;;
         *)
             print_error "Unknown platform: $TARGET_PLATFORM"
@@ -145,7 +145,7 @@ if [ -n "$TARGET_PLATFORM" ]; then
             ;;
     esac
 else
-    pnpm tauri build
+    cargo tauri build
 fi
 
 # Step 7: Display build results

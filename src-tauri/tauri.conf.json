@@ -130,7 +130,7 @@
       "open": true
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGREUwNUUzM0ZDMkNEQjIKUldTeXpjSS80d1hlWDAzWEk2dDZDWkNndEg4aFUyb2JOU2taVTE1NDkwQ2JIV0kwVFlnQ29DdjYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ1RkM0MEMwNkVBMzE1QgpSV1JiTWVvR0RNUmZCQlR1bzkyMTcycjJwY0JVeFlYQnpxNHBHU2ZESmhXbkh3UUx1T2dDWHB2Tgo=",
       "endpoints": [
         "https://github.com/Johuniq/wavee/releases/latest/download/latest.json"
       ],

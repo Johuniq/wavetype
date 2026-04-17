@@ -16,9 +16,9 @@ echo ""
 echo "📁 Project root: $PROJECT_ROOT"
 echo ""
 
-# Check if Tauri CLI is available
-if ! command -v pnpm &> /dev/null; then
-    echo "❌ Error: pnpm is not installed"
+# Check if Cargo/Tauri CLI is available
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Error: Rust/Cargo is not installed"
     exit 1
 fi
 
@@ -43,8 +43,8 @@ echo "   This password is used to encrypt the private key."
 echo ""
 
 # Generate the keys using Tauri CLI
-cd "$PROJECT_ROOT/src-tauri"
-pnpm tauri signer generate -w "$KEYS_DIR/wavee.key"
+cd "$PROJECT_ROOT"
+cargo tauri signer generate -w "$KEYS_DIR/wavee.key"
 cd "$PROJECT_ROOT"
 
 echo ""

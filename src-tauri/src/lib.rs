@@ -357,7 +357,7 @@ fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(trial_started_at.as_bytes());
     hasher.update(get_device_id().as_bytes());
-    hasher.update(b"wavetype-trial-integrity-v1");
+    hasher.update(b"wavee-trial-integrity-v1");
     hex::encode(hasher.finalize())
 }
 

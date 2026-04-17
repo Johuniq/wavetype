@@ -398,7 +398,7 @@ fn calculate_integrity_hash(cache: &CachedLicense) -> String {
     hasher.update(cache.activation_id.as_bytes());
     hasher.update(cache.device_id.as_bytes());
     hasher.update(cache.benefit_id.as_bytes());
-    hasher.update(b"wavetype-integrity-v2");
+    hasher.update(b"wavee-integrity-v2");
     hex::encode(hasher.finalize())
 }
 
