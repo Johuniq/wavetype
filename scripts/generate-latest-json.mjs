@@ -24,31 +24,71 @@ if (!version) {
   process.exit(1);
 }
 
-if (!signingKey) {
-  console.error("TAURI_SIGNING_PRIVATE_KEY is required.");
-  process.exit(1);
+const files = readdirSync(assetDir).filter((name) => !name.endsWith(".sig"));
+let existingManifest = null;
+let signingKeyPath = null;
+let signingKeyDir = null;
+
+if (existsSync(outFile)) {
+  try {
+    existingManifest = JSON.parse(readFileSync(outFile, "utf8"));
+  } catch (error) {
+    console.warn(`Ignoring existing ${outFile}: ${error.message}`);
+  }
 }
 
-const signingKeyDir = mkdtempSync(join(tmpdir(), "wavee-tauri-key-"));
-const signingKeyPath = join(signingKeyDir, "tauri.key");
-writeFileSync(signingKeyPath, signingKey, { mode: 0o600 });
 process.on("exit", () => {
-  rmSync(signingKeyDir, { recursive: true, force: true });
+  if (signingKeyDir) {
+    rmSync(signingKeyDir, { recursive: true, force: true });
+  }
 });
-
-const files = readdirSync(assetDir).filter((name) => !name.endsWith(".sig"));
 
 function findAsset(patterns) {
   return files.find((name) => patterns.every((pattern) => pattern.test(name)));
 }
 
-function signAsset(fileName) {
+function getSigningKeyPath() {
+  if (!signingKey) {
+    console.error(
+      "TAURI_SIGNING_PRIVATE_KEY is required to create missing updater signatures."
+    );
+    process.exit(1);
+  }
+
+  if (!signingKeyPath) {
+    signingKeyDir = mkdtempSync(join(tmpdir(), "wavee-tauri-key-"));
+    signingKeyPath = join(signingKeyDir, "tauri.key");
+    writeFileSync(signingKeyPath, signingKey, { mode: 0o600 });
+  }
+
+  return signingKeyPath;
+}
+
+function existingSignatureFor(fileName, platformKey) {
+  const platforms = existingManifest?.platforms;
+  if (!platforms || typeof platforms !== "object") return null;
+
+  const candidates = [
+    platforms[platformKey],
+    ...Object.values(platforms),
+  ].filter(Boolean);
+
+  const entry = candidates.find((candidate) => {
+    if (!candidate.signature || !candidate.url) return false;
+    return basename(new URL(candidate.url).pathname) === fileName;
+  });
+
+  return entry?.signature || null;
+}
+
+function signAsset(fileName, platformKey) {
   if (!fileName) return null;
 
   const filePath = join(assetDir, fileName);
   const signaturePath = `${filePath}.sig`;
+  const existingSignature = existingSignatureFor(fileName, platformKey);
 
-  if (!existsSync(signaturePath)) {
+  if (!existsSync(signaturePath) && !existingSignature) {
     const signerEnv = { ...process.env };
     delete signerEnv.TAURI_SIGNING_PRIVATE_KEY;
     signerEnv.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = signingPassword;
@@ -59,7 +99,7 @@ function signAsset(fileName) {
         "signer",
         "sign",
         "--private-key-path",
-        signingKeyPath,
+        getSigningKeyPath(),
         "--password",
         signingPassword,
         filePath,
@@ -80,7 +120,7 @@ function signAsset(fileName) {
   }
 
   return {
-    signature: readFileSync(signaturePath, "utf8").trim(),
+    signature: existingSignature || readFileSync(signaturePath, "utf8").trim(),
     url: `https://github.com/${repository}/releases/download/v${version}/${basename(fileName)}`,
   };
 }
@@ -109,16 +149,16 @@ if (requireAllPlatforms) {
 
 const platforms = {};
 
-const windowsUpdater = signAsset(windowsExe);
+const windowsUpdater = signAsset(windowsExe, "windows-x86_64");
 if (windowsUpdater) platforms["windows-x86_64"] = windowsUpdater;
 
-const windowsMsiEntry = signAsset(windowsMsi);
+const windowsMsiEntry = signAsset(windowsMsi, "windows-x86_64-msi");
 if (windowsMsiEntry) platforms["windows-x86_64-msi"] = windowsMsiEntry;
 
-const darwinAarch64Entry = signAsset(darwinAarch64);
+const darwinAarch64Entry = signAsset(darwinAarch64, "darwin-aarch64");
 if (darwinAarch64Entry) platforms["darwin-aarch64"] = darwinAarch64Entry;
 
-const darwinX64Entry = signAsset(darwinX64);
+const darwinX64Entry = signAsset(darwinX64, "darwin-x86_64");
 if (darwinX64Entry) platforms["darwin-x86_64"] = darwinX64Entry;
 
 const manifest = {

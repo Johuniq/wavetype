@@ -236,9 +236,19 @@ jobs:
             REQUIRE_ALL_PLATFORMS=true \
             node scripts/generate-latest-json.mjs release-assets release-assets/latest.json
 
-          gh release upload "$GITHUB_REF_NAME" release-assets/*.sig \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+          sig_files=()
+          for sig_file in release-assets/*.sig; do
+            [[ -e "$sig_file" ]] || continue
+            sig_files+=("$sig_file")
+          done
+
+          if (( ${#sig_files[@]} > 0 )); then
+            gh release upload "$GITHUB_REF_NAME" "${sig_files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            echo "No standalone .sig files were generated; latest.json contains updater signatures."
+          fi
 
           gh release upload "$GITHUB_REF_NAME" release-assets/latest.json \
             --repo "$GITHUB_REPOSITORY" \
