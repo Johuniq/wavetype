@@ -13,8 +13,30 @@ if (!assetDir || !outFile) {
 const version = process.env.VERSION;
 const repository = process.env.GITHUB_REPOSITORY || "Johuniq/wavee";
 const stripTrailingLineBreaks = (value) => value?.replace(/[\r\n]+$/, "");
+const expandEscapedNewlines = (value) => value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+const normalizeSigningKey = (rawValue) => {
+  if (!rawValue) return rawValue;
 
-const signingKey = stripTrailingLineBreaks(process.env.TAURI_SIGNING_PRIVATE_KEY);
+  const trimmed = rawValue.trim();
+  const withRealNewlines = expandEscapedNewlines(trimmed);
+  if (withRealNewlines.includes("BEGIN PRIVATE KEY")) {
+    return stripTrailingLineBreaks(withRealNewlines);
+  }
+
+  try {
+    const decoded = Buffer.from(trimmed, "base64").toString("utf8");
+    const normalizedDecoded = expandEscapedNewlines(decoded).trim();
+    if (normalizedDecoded.includes("BEGIN PRIVATE KEY")) {
+      return stripTrailingLineBreaks(normalizedDecoded);
+    }
+  } catch {
+    // keep original format if not valid base64
+  }
+
+  return stripTrailingLineBreaks(withRealNewlines);
+};
+
+const signingKey = normalizeSigningKey(process.env.TAURI_SIGNING_PRIVATE_KEY);
 const signingPassword = stripTrailingLineBreaks(process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) || "";
 const pubDate = process.env.PUB_DATE || new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 const requireAllPlatforms = process.env.REQUIRE_ALL_PLATFORMS === "true";
