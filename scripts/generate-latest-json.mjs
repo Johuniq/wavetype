@@ -12,8 +12,10 @@ if (!assetDir || !outFile) {
 
 const version = process.env.VERSION;
 const repository = process.env.GITHUB_REPOSITORY || "Johuniq/wavee";
-const signingKey = process.env.TAURI_SIGNING_PRIVATE_KEY;
-const signingPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || "";
+const stripTrailingLineBreaks = (value) => value?.replace(/[\r\n]+$/, "");
+
+const signingKey = stripTrailingLineBreaks(process.env.TAURI_SIGNING_PRIVATE_KEY);
+const signingPassword = stripTrailingLineBreaks(process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) || "";
 const pubDate = process.env.PUB_DATE || new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 const requireAllPlatforms = process.env.REQUIRE_ALL_PLATFORMS === "true";
 
@@ -51,19 +53,30 @@ function signAsset(fileName) {
     delete signerEnv.TAURI_SIGNING_PRIVATE_KEY;
     signerEnv.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = signingPassword;
 
-    execFileSync("cargo", [
-      "tauri",
-      "signer",
-      "sign",
-      "--private-key-path",
-      signingKeyPath,
-      "--password",
-      signingPassword,
-      filePath,
-    ], {
-      env: signerEnv,
-      stdio: "inherit",
-    });
+    try {
+      execFileSync("cargo", [
+        "tauri",
+        "signer",
+        "sign",
+        "--private-key-path",
+        signingKeyPath,
+        "--password",
+        signingPassword,
+        filePath,
+      ], {
+        env: signerEnv,
+        stdio: "inherit",
+      });
+    } catch (error) {
+      console.error(
+        [
+          `Failed to sign ${fileName}.`,
+          "Verify that TAURI_SIGNING_PRIVATE_KEY is the exact contents of the Tauri private key file",
+          "and TAURI_SIGNING_PRIVATE_KEY_PASSWORD matches the password used when that key was generated.",
+        ].join(" ")
+      );
+      throw error;
+    }
   }
 
   return {
