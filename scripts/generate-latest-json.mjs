@@ -47,6 +47,10 @@ function signAsset(fileName) {
   const signaturePath = `${filePath}.sig`;
 
   if (!existsSync(signaturePath)) {
+    const signerEnv = { ...process.env };
+    delete signerEnv.TAURI_SIGNING_PRIVATE_KEY;
+    signerEnv.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = signingPassword;
+
     execFileSync("cargo", [
       "tauri",
       "signer",
@@ -57,10 +61,7 @@ function signAsset(fileName) {
       signingPassword,
       filePath,
     ], {
-      env: {
-        ...process.env,
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: signingPassword,
-      },
+      env: signerEnv,
       stdio: "inherit",
     });
   }
