@@ -625,16 +625,14 @@ impl LicenseManager {
             // Persist initial cache
             store_cache(&cache)?;
 
-            // After activation we should also perform a validation request so that
-            // Polar's validation counters (and any server-side state) are updated
-            // immediately. We set increment_usage to Some(1) so that both
-            // activation and validation counts are incremented.
+            // After activation, verify the activation can be validated without
+            // consuming any metered license usage.
             match self
                 .perform_validate(
                     &cache.license_key,
                     &cache.activation_id,
                     Some(cache.benefit_id.clone()),
-                    Some(1),
+                    None,
                 )
                 .await
             {
@@ -713,16 +711,14 @@ impl LicenseManager {
             error!("License key not found");
             Err("Invalid license key. Please check and try again.".to_string())
         } else if status.as_u16() == 422 {
-            let err: PolarError = serde_json::from_str(&body).unwrap_or(PolarError {
+            let _err: PolarError = serde_json::from_str(&body).unwrap_or(PolarError {
                 error: Some("Validation error".to_string()),
-                detail: Some(body.clone()),
+                detail: None,
                 error_type: None,
             });
-            error!("Validation error: {:?}", err);
-            Err(format!(
-                "Invalid request: {}",
-                err.detail.unwrap_or(err.error.unwrap_or_default())
-            ))
+            error!("Activation request rejected by license server");
+            debug!("Activation rejection response body: {}", body);
+            Err("Invalid license request. Please check your key and try again.".to_string())
         } else {
             error!("Activation failed: {} - {}", status, body);
             Err(format!("Activation failed: HTTP {}", status))
@@ -748,7 +744,7 @@ impl LicenseManager {
                     &cached.license_key,
                     &cached.activation_id,
                     Some(cached.benefit_id.clone()),
-                    Some(1), // Increment usage on manual validation too
+                    None,
                 )
                 .await
             {
@@ -810,6 +806,67 @@ impl LicenseManager {
         Err("No license activated. Please enter your license key.".to_string())
     }
 
+    /// Validate a license using credentials restored from the app database.
+    ///
+    /// This is used when the encrypted cache is missing but the database still
+    /// contains a recent activated license record.
+    pub async fn validate_activation(
+        &self,
+        license_key: &str,
+        activation_id: &str,
+    ) -> Result<LicenseInfo, String> {
+        let device_id = get_device_id();
+        let device_label = get_device_label();
+
+        info!("Validating license from stored activation...");
+
+        let data = self
+            .perform_validate(license_key, activation_id, None, None)
+            .await?;
+
+        let license_status = self.check_license_status_from_validate(&data);
+
+        let cache = CachedLicense {
+            license_key: license_key.to_string(),
+            activation_id: data
+                .activation
+                .as_ref()
+                .map(|a| a.id.clone())
+                .unwrap_or_else(|| activation_id.to_string()),
+            device_id: device_id.clone(),
+            device_label: device_label.clone(),
+            customer_email: data.customer.as_ref().map(|c| c.email.clone()),
+            customer_name: data.customer.as_ref().and_then(|c| c.name.clone()),
+            benefit_id: data.benefit_id.clone(),
+            expires_at: data.expires_at.clone(),
+            last_validated_at: chrono::Utc::now().to_rfc3339(),
+            status: data.status.clone(),
+            usage: data.usage,
+            validations: data.validations,
+            integrity_hash: String::new(),
+            cache_version: CACHE_VERSION,
+        };
+        let _ = store_cache(&cache);
+
+        Ok(LicenseInfo {
+            license_key: license_key.to_string(),
+            display_key: data.display_key,
+            status: license_status,
+            activation_id: Some(cache.activation_id),
+            customer_email: data.customer.as_ref().map(|c| c.email.clone()),
+            customer_name: data.customer.as_ref().and_then(|c| c.name.clone()),
+            benefit_id: Some(data.benefit_id),
+            expires_at: data.expires_at,
+            limit_activations: data.limit_activations,
+            usage: data.usage,
+            limit_usage: data.limit_usage,
+            validations: data.validations,
+            last_validated_at: data.last_validated_at,
+            device_id,
+            device_label,
+        })
+    }
+
     /// Validate license offline using cache
     fn validate_offline(
         &self,
@@ -847,12 +904,22 @@ impl LicenseManager {
     pub async fn deactivate(&self) -> Result<(), String> {
         let cache = load_cache().ok_or("No license to deactivate")?;
 
+        self.deactivate_activation(&cache.license_key, &cache.activation_id)
+            .await
+    }
+
+    /// Deactivate a license using explicit credentials.
+    pub async fn deactivate_activation(
+        &self,
+        license_key: &str,
+        activation_id: &str,
+    ) -> Result<(), String> {
         info!("Deactivating license from device...");
 
         let request = DeactivateRequest {
-            key: cache.license_key.clone(),
+            key: license_key.to_string(),
             organization_id: self.org_id.clone(),
-            activation_id: cache.activation_id.clone(),
+            activation_id: activation_id.to_string(),
         };
 
         let url = format!("{}/deactivate", POLAR_API_BASE);
@@ -880,8 +947,9 @@ impl LicenseManager {
             Ok(())
         } else {
             let body = response.text().await.unwrap_or_default();
-            error!("Deactivation failed: {} - {}", status, body);
-            Err(format!("Deactivation failed: HTTP {}", status))
+            error!("Deactivation failed: {}", status);
+            debug!("Deactivation response body: {}", body);
+            Err("License deactivation failed. Please try again.".to_string())
         }
     }
 
@@ -1000,10 +1068,12 @@ impl LicenseManager {
             let data: ValidateResponse = serde_json::from_str(&body).map_err(|e| {
                 format!("Failed to parse validate response: {} - Body: {}", e, body)
             })?;
-            Ok(data)
-        } else {
-            Err(format!("Validate failed: HTTP {} - {}", status, body))
+            return Ok(data);
         }
+
+        warn!("License validation rejected by server: {}", status);
+        debug!("License validation response body: {}", body);
+        Err("License validation was rejected by the license server.".to_string())
     }
 }
 
@@ -1032,6 +1102,10 @@ fn mask_key(key: &str) -> String {
 }
 
 fn is_authoritative_validate_error(error: &str) -> bool {
+    if error.contains("rejected by the license server") {
+        return true;
+    }
+
     error.contains("HTTP 400")
         || error.contains("HTTP 401")
         || error.contains("HTTP 403")

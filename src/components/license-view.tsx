@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/errors";
 import { reportError } from "@/lib/voice-api";
 import {
     activateLicense,
@@ -64,53 +65,11 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
 
   const { success: toastSuccess, error: toastError } = useToast();
 
-  // Helper to extract useful messages from various error shapes returned by Tauri
+  // Helper to keep production license errors user-friendly.
   const extractErrorMessage = (err: any): string => {
     try {
       if (!err) return "Unknown error";
-      // If it's a plain string
-      if (typeof err === "string") {
-        // try to pull PolarError detail if present
-        const m = err.match(/detail: Some\\("([^"]+)"\\)/);
-        if (m && m[1]) return m[1];
-        return err;
-      }
-
-      // If it's a JS Error
-      if (err instanceof Error) {
-        return err.message;
-      }
-
-      // Some invoke errors come wrapped { payload: '...'} or { message: '...'}
-      if (typeof err === "object") {
-        if (err.payload) {
-          // payload might be a stringified error
-          const p = err.payload as any;
-          if (typeof p === "string") {
-            const m = p.match(/detail: Some\\("([^"]+)"\\)/);
-            if (m && m[1]) return m[1];
-            return p;
-          }
-        }
-
-        if (err.message) {
-          const m = String(err.message).match(/detail: Some\\("([^"]+)"\\)/);
-          if (m && m[1]) return m[1];
-          return String(err.message);
-        }
-
-        // Fallback to JSON stringify
-        try {
-          const s = JSON.stringify(err);
-          const m = s.match(/detail\\\":\\\"([^\\\"]+)\\\"/);
-          if (m && m[1]) return m[1];
-          return s;
-        } catch {
-          return String(err);
-        }
-      }
-
-      return String(err);
+      return getErrorMessage(err);
     } catch (e) {
       return "Unknown error";
     }
@@ -189,7 +148,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       const data = await validateLicense();
       setLicense(data);
       if (data.is_activated && data.status === "active") {
-        setSuccess("License validated successfully!");
+        toastSuccess("License validated", "License validated successfully");
       } else {
         setError(getLicenseStatusMessage(data.status));
       }

@@ -97,6 +97,24 @@ const ERROR_MAP: Record<string, UserError> = {
     recoverable: true,
   },
 
+  // License errors
+  "License error": {
+    title: "License Error",
+    message: "License verification failed. Please try again.",
+    recoverable: true,
+  },
+  "No active license": {
+    title: "No Active License",
+    message: "No active license was found. Please activate your license key.",
+    recoverable: true,
+  },
+  "license server": {
+    title: "License Error",
+    message:
+      "This license could not be verified. Please contact support if you think this is a mistake.",
+    recoverable: true,
+  },
+
   // File errors
   "File not found": {
     title: "File Not Found",
@@ -114,7 +132,35 @@ const ERROR_MAP: Record<string, UserError> = {
  * Parse an error and return a user-friendly message
  */
 export function parseError(error: unknown): UserError {
-  const errorString = error instanceof Error ? error.message : String(error);
+  let errorString = error instanceof Error ? error.message : String(error);
+  if (error && typeof error === "object" && !(error instanceof Error)) {
+    const wrapped = error as { payload?: unknown; message?: unknown };
+    if (typeof wrapped.payload === "string") {
+      errorString = wrapped.payload;
+    } else if (typeof wrapped.message === "string") {
+      errorString = wrapped.message;
+    }
+  }
+
+  const lower = errorString.toLowerCase();
+
+  if (
+    lower.includes("{\"error\"") ||
+    lower.includes("badrequest") ||
+    lower.includes("http 400") ||
+    lower.includes("http 401") ||
+    lower.includes("http 403") ||
+    lower.includes("http 404") ||
+    lower.includes("http 422") ||
+    lower.includes("0 more usages")
+  ) {
+    return {
+      title: "License Error",
+      message:
+        "This license could not be verified. Please contact support if you think this is a mistake.",
+      recoverable: true,
+    };
+  }
 
   // Check for exact matches
   if (ERROR_MAP[errorString]) {

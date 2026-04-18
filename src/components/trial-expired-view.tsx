@@ -53,9 +53,7 @@ export function TrialExpiredView({
       if (data.is_activated && data.status === "active") {
         setSuccess("License activated successfully!");
         toastSuccess("License activated", "License activated successfully");
-        setTimeout(() => {
-          onLicenseActivated();
-        }, 1500);
+        onLicenseActivated();
       } else {
         const msg = "License activation failed. Please check your key.";
         toastError("Activation failed", msg);

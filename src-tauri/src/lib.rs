@@ -15,7 +15,8 @@ use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistor
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
 use license::{
-    clear_cache, get_device_id, get_device_label, LicenseInfo, LicenseManager, LicenseStatus,
+    clear_cache, get_device_id, get_device_label, load_cache, LicenseInfo, LicenseManager,
+    LicenseStatus,
 };
 use log::{debug, error, info, warn};
 use post_process::PostProcessor;
@@ -274,12 +275,48 @@ pub enum CommandError {
     PostProcessing(String),
 }
 
+fn user_facing_license_error(error: &str) -> &'static str {
+    let lower = error.to_lowercase();
+
+    if lower.contains("no license") || lower.contains("not activated") {
+        return "No active license was found. Please activate your license key.";
+    }
+
+    if lower.contains("activation limit") {
+        return "This license has reached its device limit. Please deactivate it on another device first.";
+    }
+
+    if lower.contains("invalid license") || lower.contains("invalid request") {
+        return "That license key could not be verified. Please check the key and try again.";
+    }
+
+    if lower.contains("network") || lower.contains("connect") || lower.contains("offline") {
+        return "Could not reach the license server. Please check your internet connection and try again.";
+    }
+
+    if lower.contains("expired") {
+        return "This license has expired. Please renew or use a different license key.";
+    }
+
+    if lower.contains("revoked") || lower.contains("disabled") || lower.contains("rejected") {
+        return "This license could not be verified. Please contact support if you think this is a mistake.";
+    }
+
+    "License verification failed. Please try again."
+}
+
 impl serde::Serialize for CommandError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(self.to_string().as_ref())
+        match self {
+            CommandError::License(error) => {
+                let message = format!("License error: {}", user_facing_license_error(error));
+                serializer.serialize_str(&message)
+            }
+            _ => serializer.serialize_str(self.to_string().as_ref()),
+        }
     }
 }
 
@@ -306,10 +343,14 @@ async fn has_valid_license_verified(license_manager: &LicenseManager) -> bool {
 
     #[cfg(not(target_os = "linux"))]
     {
+        if load_cache().is_none() {
+            return false;
+        }
+
         match license_manager.validate().await {
             Ok(info) => info.status.allows_usage(),
             Err(error) => {
-                warn!("Verified license check failed: {}", error);
+                debug!("Verified license check failed: {}", error);
                 false
             }
         }
@@ -351,6 +392,45 @@ fn has_active_trial(db: &Database) -> bool {
             (chrono::Utc::now() - start_date.with_timezone(&chrono::Utc)).num_days();
         (0..7).contains(&days_since_start)
     }
+}
+
+fn db_license_allows_usage(license: &database::LicenseData) -> bool {
+    if !license.is_activated || license.status != "active" {
+        return false;
+    }
+
+    if license.license_key.is_none() || license.activation_id.is_none() {
+        return false;
+    }
+
+    if let Some(expires_at) = &license.expires_at {
+        let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) else {
+            warn!("Stored license has invalid expiration timestamp");
+            return false;
+        };
+
+        if expiry < chrono::Utc::now() {
+            return false;
+        }
+    }
+
+    let Some(last_validated_at) = &license.last_validated_at else {
+        return false;
+    };
+
+    let Ok(last_validated) = chrono::DateTime::parse_from_rfc3339(last_validated_at) else {
+        warn!("Stored license has invalid validation timestamp");
+        return false;
+    };
+
+    let now = chrono::Utc::now();
+    let last_validated = last_validated.with_timezone(&chrono::Utc);
+    if last_validated > now {
+        warn!("Stored license validation timestamp is in the future");
+        return false;
+    }
+
+    (now - last_validated).num_hours() < 168
 }
 
 fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
@@ -1453,14 +1533,7 @@ fn get_license(
     }
 
     // Fall back to database
-    let mut license = db.0.get_license().map_err(CommandError::Database)?;
-    if license.is_activated || license.status == "active" {
-        license.license_key = None;
-        license.activation_id = None;
-        license.status = "not_activated".to_string();
-        license.is_activated = false;
-        license.last_validated_at = None;
-    }
+    let license = db.0.get_license().map_err(CommandError::Database)?;
     Ok(LicenseResponse::from(license))
 }
 
@@ -1518,12 +1591,28 @@ async fn validate_license(
 ) -> CommandResult<LicenseResponse> {
     info!("Validating license...");
 
-    // Validate using the new LicenseManager
-    let license_info = license_manager
-        .0
-        .validate()
-        .await
-        .map_err(CommandError::License)?;
+    let license_info = match license_manager.0.validate().await {
+        Ok(info) => info,
+        Err(error) => {
+            let stored_license = db.0.get_license().map_err(CommandError::Database)?;
+            let Some(license_key) = stored_license.license_key.as_deref() else {
+                return Err(CommandError::License(error));
+            };
+            let Some(activation_id) = stored_license.activation_id.as_deref() else {
+                return Err(CommandError::License(error));
+            };
+
+            if !db_license_allows_usage(&stored_license) {
+                return Err(CommandError::License(error));
+            }
+
+            license_manager
+                .0
+                .validate_activation(license_key, activation_id)
+                .await
+                .map_err(CommandError::License)?
+        }
+    };
 
     // Update database
     let license_data = LicenseData {
@@ -1554,12 +1643,26 @@ async fn deactivate_license(
 ) -> CommandResult<()> {
     info!("Deactivating license...");
 
-    // Deactivate using the new LicenseManager
-    license_manager
-        .0
-        .deactivate()
-        .await
-        .map_err(CommandError::License)?;
+    let deactivate_result = license_manager.0.deactivate().await;
+    if let Err(error) = deactivate_result {
+        let stored_license = db.0.get_license().map_err(CommandError::Database)?;
+        let Some(license_key) = stored_license.license_key.as_deref() else {
+            return Err(CommandError::License(error));
+        };
+        let Some(activation_id) = stored_license.activation_id.as_deref() else {
+            return Err(CommandError::License(error));
+        };
+
+        if !db_license_allows_usage(&stored_license) {
+            return Err(CommandError::License(error));
+        }
+
+        license_manager
+            .0
+            .deactivate_activation(license_key, activation_id)
+            .await
+            .map_err(CommandError::License)?;
+    }
 
     // Clear database
     db.0.clear_license().map_err(CommandError::Database)?;
@@ -1595,6 +1698,12 @@ async fn is_license_valid(
         // only for non-authoritative network failures.
         if has_valid_license_verified(&license_manager).await {
             return Ok(true);
+        }
+
+        if let Ok(license) = db.get_license() {
+            if db_license_allows_usage(&license) {
+                return Ok(true);
+            }
         }
 
         Ok(has_active_trial(&db))
@@ -1720,6 +1829,15 @@ async fn get_trial_status(
         }
 
         let license = db.get_license().map_err(CommandError::Database)?;
+        if db_license_allows_usage(&license) {
+            return Ok(serde_json::json!({
+                "isInTrial": false,
+                "daysRemaining": 0,
+                "trialExpired": false,
+                "hasLicense": true
+            }));
+        }
+
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
             let expected_hash = calculate_trial_integrity_hash(trial_started);
@@ -1794,6 +1912,13 @@ async fn can_use_app(
         }
 
         let license = db.get_license().map_err(CommandError::Database)?;
+        if db_license_allows_usage(&license) {
+            return Ok(serde_json::json!({
+                "canUse": true,
+                "reason": "licensed",
+                "daysRemaining": null
+            }));
+        }
 
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
@@ -2483,7 +2608,12 @@ async fn ensure_app_access_verified(
     db: &Database,
     license_manager: &LicenseManager,
 ) -> CommandResult<()> {
-    if has_valid_license_verified(license_manager).await || has_active_trial(db) {
+    let has_db_license = db
+        .get_license()
+        .map(|license| db_license_allows_usage(&license))
+        .unwrap_or(false);
+
+    if has_valid_license_verified(license_manager).await || has_db_license || has_active_trial(db) {
         Ok(())
     } else {
         Err(CommandError::License(
