@@ -11,6 +11,8 @@ Install the required tools:
 - Rust stable, minimum Rust 1.81
 - Platform dependencies required by Tauri
 
+Wavee currently targets Windows and macOS. Linux desktop builds are not supported.
+
 Install dependencies:
 
 ```sh

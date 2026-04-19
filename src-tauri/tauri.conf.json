@@ -52,7 +52,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi", "dmg", "app"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -62,26 +62,11 @@
     ],
     "resources": [],
     "category": "Utility",
-    "shortDescription": "Open-source voice-to-text desktop app",
-    "longDescription": "Wavee is an open-source voice-to-text application that lets you dictate text on your computer using local speech recognition models. Features include push-to-talk and toggle recording modes, model management, optional text injection, transcription history, and file transcription support.",
+    "shortDescription": "Wave your voice into text at your cursor",
+    "longDescription": "Wavee is an open-source desktop dictation app that turns your voice into polished text at your cursor using local speech models. Features include push-to-talk and toggle recording modes, model management, optional text injection, transcription history, and file transcription support.",
     "publisher": "Johuniq",
     "copyright": "Copyright (c) 2026 Johuniq",
     "licenseFile": "../LICENSE",
-    "linux": {
-      "appimage": {
-        "bundleMediaFramework": true,
-        "files": {}
-      },
-      "deb": {
-        "depends": ["libxdo3", "libasound2"],
-        "section": "utils",
-        "priority": "optional"
-      },
-      "rpm": {
-        "depends": ["libxdo", "alsa-lib"],
-        "release": "1"
-      }
-    },
     "macOS": {
       "entitlements": "Wavee.entitlements",
       "minimumSystemVersion": "13.0",

@@ -114,7 +114,7 @@ export function TrialExpiredView({
                     <div className="flex-1">
                       <h3 className="font-medium">Get Wavee Pro</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Unlimited voice-to-text, lifetime updates
+                        Unlimited voice-to-cursor, lifetime updates
                       </p>
                       <Button
                         className="mt-3 w-full"
@@ -156,7 +156,7 @@ export function TrialExpiredView({
                     </Label>
                     <Input
                       id="license-key"
-                      placeholder="XXXX-XXXX-XXXX-XXXX"
+                      placeholder="Paste your Wavee license key"
                       value={licenseKey}
                       onChange={(e) => setLicenseKey(e.target.value)}
                       className="font-mono text-sm"

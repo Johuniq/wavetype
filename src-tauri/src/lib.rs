@@ -333,42 +333,26 @@ fn license_status_to_response(status: &LicenseStatus) -> String {
 
 #[allow(unused_variables)]
 async fn has_valid_license_verified(license_manager: &LicenseManager) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        true
+    if load_cache().is_none() {
+        return false;
     }
 
-    #[cfg(not(target_os = "linux"))]
-    {
-        if load_cache().is_none() {
-            return false;
-        }
-
-        match license_manager.validate().await {
-            Ok(info) => info.status.allows_usage(),
-            Err(error) => {
-                debug!("Verified license check failed: {}", error);
-                false
-            }
+    match license_manager.validate().await {
+        Ok(info) => info.status.allows_usage(),
+        Err(error) => {
+            debug!("Verified license check failed: {}", error);
+            false
         }
     }
 }
 
 #[allow(unused_variables)]
 fn has_active_trial(db: &Database) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        true
-    }
+    let Ok(license) = db.get_license() else {
+        return false;
+    };
 
-    #[cfg(not(target_os = "linux"))]
-    {
-        let Ok(license) = db.get_license() else {
-            return false;
-        };
-
-        has_active_trial_core(&license, chrono::Utc::now())
-    }
+    has_active_trial_core(&license, chrono::Utc::now())
 }
 
 pub fn has_active_trial_core(
@@ -1700,28 +1684,19 @@ async fn is_license_valid(
     let db = db.0.clone();
     let license_manager = license_manager.0.clone();
 
-    // Linux users get free access forever
-    #[cfg(target_os = "linux")]
-    {
+    // Prefer server validation. LicenseManager falls back to offline grace
+    // only for non-authoritative network failures.
+    if has_valid_license_verified(&license_manager).await {
         return Ok(true);
     }
 
-    #[cfg(not(target_os = "linux"))]
-    {
-        // Prefer server validation. LicenseManager falls back to offline grace
-        // only for non-authoritative network failures.
-        if has_valid_license_verified(&license_manager).await {
+    if let Ok(license) = db.get_license() {
+        if db_license_allows_usage(&license) {
             return Ok(true);
         }
-
-        if let Ok(license) = db.get_license() {
-            if db_license_allows_usage(&license) {
-                return Ok(true);
-            }
-        }
-
-        Ok(has_active_trial(&db))
     }
+
+    Ok(has_active_trial(&db))
 }
 
 #[tauri::command]
@@ -1799,14 +1774,7 @@ fn get_device_info() -> serde_json::Value {
         "device_label": get_device_label(),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "is_free_tier": cfg!(target_os = "linux"),
     })
-}
-
-/// Check if the current platform has free access (Linux)
-#[tauri::command]
-fn is_platform_free() -> bool {
-    cfg!(target_os = "linux")
 }
 
 #[tauri::command]
@@ -1818,79 +1786,64 @@ async fn get_trial_status(
     let db = db.0.clone();
     let license_manager = license_manager.0.clone();
 
-    // Linux users are always free
-    #[cfg(target_os = "linux")]
-    {
+    // Check for active license first with server validation when possible.
+    if has_valid_license_verified(&license_manager).await {
         return Ok(serde_json::json!({
             "isInTrial": false,
             "daysRemaining": 0,
             "trialExpired": false,
-            "hasLicense": true,
-            "isLinuxFree": true
+            "hasLicense": true
         }));
     }
 
-    #[cfg(not(target_os = "linux"))]
-    {
-        // Check for active license first with server validation when possible.
-        if has_valid_license_verified(&license_manager).await {
-            return Ok(serde_json::json!({
-                "isInTrial": false,
-                "daysRemaining": 0,
-                "trialExpired": false,
-                "hasLicense": true
-            }));
-        }
-
-        let license = db.get_license().map_err(CommandError::Database)?;
-        if db_license_allows_usage(&license) {
-            return Ok(serde_json::json!({
-                "isInTrial": false,
-                "daysRemaining": 0,
-                "trialExpired": false,
-                "hasLicense": true
-            }));
-        }
-
-        // Check trial status
-        if let Some(trial_started) = &license.trial_started_at {
-            let expected_hash = calculate_trial_integrity_hash(trial_started);
-            if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
-                warn!("Trial integrity check failed in get_trial_status");
-                return Ok(serde_json::json!({
-                    "isInTrial": false,
-                    "daysRemaining": 0,
-                    "trialExpired": true,
-                    "hasLicense": false
-                }));
-            }
-
-            if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-                let now = chrono::Utc::now();
-                let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                let days_remaining = if days_since_start < 0 {
-                    0
-                } else {
-                    (7 - days_since_start).max(0)
-                };
-
-                return Ok(serde_json::json!({
-                    "isInTrial": days_remaining > 0,
-                    "daysRemaining": days_remaining,
-                    "trialExpired": days_remaining <= 0,
-                    "hasLicense": false
-                }));
-            }
-        }
-
-        // No trial started
-        Ok(serde_json::json!({
+    let license = db.get_license().map_err(CommandError::Database)?;
+    if db_license_allows_usage(&license) {
+        return Ok(serde_json::json!({
             "isInTrial": false,
             "daysRemaining": 0,
             "trialExpired": false,
-            "hasLicense": false
-        }))
+            "hasLicense": true
+        }));
     }
+
+    // Check trial status
+    if let Some(trial_started) = &license.trial_started_at {
+        let expected_hash = calculate_trial_integrity_hash(trial_started);
+        if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+            warn!("Trial integrity check failed in get_trial_status");
+            return Ok(serde_json::json!({
+                "isInTrial": false,
+                "daysRemaining": 0,
+                "trialExpired": true,
+                "hasLicense": false
+            }));
+        }
+
+        if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
+            let now = chrono::Utc::now();
+            let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+            let days_remaining = if days_since_start < 0 {
+                0
+            } else {
+                (7 - days_since_start).max(0)
+            };
+
+            return Ok(serde_json::json!({
+                "isInTrial": days_remaining > 0,
+                "daysRemaining": days_remaining,
+                "trialExpired": days_remaining <= 0,
+                "hasLicense": false
+            }));
+        }
+    }
+
+    // No trial started
+    Ok(serde_json::json!({
+        "isInTrial": false,
+        "daysRemaining": 0,
+        "trialExpired": false,
+        "hasLicense": false
+    }))
 }
 
 #[tauri::command]
@@ -1902,82 +1855,68 @@ async fn can_use_app(
     let db = db.0.clone();
     let license_manager = license_manager.0.clone();
 
-    // Linux users get free access forever - no license required
-    #[cfg(target_os = "linux")]
-    {
+    // Prefer server validation. LicenseManager falls back to offline grace
+    // only for non-authoritative network failures.
+    if has_valid_license_verified(&license_manager).await {
         return Ok(serde_json::json!({
             "canUse": true,
             "reason": "licensed",
-            "daysRemaining": null,
-            "isLinuxFree": true
+            "daysRemaining": null
         }));
     }
 
-    #[cfg(not(target_os = "linux"))]
-    {
-        // Prefer server validation. LicenseManager falls back to offline grace
-        // only for non-authoritative network failures.
-        if has_valid_license_verified(&license_manager).await {
+    let license = db.get_license().map_err(CommandError::Database)?;
+    if db_license_allows_usage(&license) {
+        return Ok(serde_json::json!({
+            "canUse": true,
+            "reason": "licensed",
+            "daysRemaining": null
+        }));
+    }
+
+    // Check trial status
+    if let Some(trial_started) = &license.trial_started_at {
+        let expected_hash = calculate_trial_integrity_hash(trial_started);
+        if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+            warn!("Trial integrity check failed in can_use_app");
             return Ok(serde_json::json!({
-                "canUse": true,
-                "reason": "licensed",
-                "daysRemaining": null
+                "canUse": false,
+                "reason": "trial_expired",
+                "daysRemaining": 0
             }));
         }
 
-        let license = db.get_license().map_err(CommandError::Database)?;
-        if db_license_allows_usage(&license) {
-            return Ok(serde_json::json!({
-                "canUse": true,
-                "reason": "licensed",
-                "daysRemaining": null
-            }));
-        }
+        if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
+            let now = chrono::Utc::now();
+            let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+            let days_remaining = if days_since_start < 0 {
+                0
+            } else {
+                (7 - days_since_start).max(0)
+            };
 
-        // Check trial status
-        if let Some(trial_started) = &license.trial_started_at {
-            let expected_hash = calculate_trial_integrity_hash(trial_started);
-            if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
-                warn!("Trial integrity check failed in can_use_app");
+            if days_remaining > 0 {
+                return Ok(serde_json::json!({
+                    "canUse": true,
+                    "reason": "trial",
+                    "daysRemaining": days_remaining
+                }));
+            } else {
                 return Ok(serde_json::json!({
                     "canUse": false,
                     "reason": "trial_expired",
                     "daysRemaining": 0
                 }));
             }
-
-            if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-                let now = chrono::Utc::now();
-                let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                let days_remaining = if days_since_start < 0 {
-                    0
-                } else {
-                    (7 - days_since_start).max(0)
-                };
-
-                if days_remaining > 0 {
-                    return Ok(serde_json::json!({
-                        "canUse": true,
-                        "reason": "trial",
-                        "daysRemaining": days_remaining
-                    }));
-                } else {
-                    return Ok(serde_json::json!({
-                        "canUse": false,
-                        "reason": "trial_expired",
-                        "daysRemaining": 0
-                    }));
-                }
-            }
         }
-
-        // No license and no trial
-        Ok(serde_json::json!({
-            "canUse": false,
-            "reason": "no_license",
-            "daysRemaining": null
-        }))
     }
+
+    // No license and no trial
+    Ok(serde_json::json!({
+        "canUse": false,
+        "reason": "no_license",
+        "daysRemaining": null
+    }))
 }
 
 // ==================== Utility Commands ====================
@@ -2463,7 +2402,6 @@ pub fn run() {
             start_trial,
             get_trial_status,
             get_device_info,
-            is_platform_free,
             can_use_app,
             // Utility
             get_app_data_dir,

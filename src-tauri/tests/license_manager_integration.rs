@@ -24,7 +24,7 @@ async fn license_manager_activation_success() {
                 "customer_id": "cust_123",
                 "customer": {
                     "id": "cust_123",
-                    "email": "test@example.com",
+                    "email": "tester@wavee.test",
                     "name": "Test User"
                 },
                 "benefit_id": "ben_123",

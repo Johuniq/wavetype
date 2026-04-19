@@ -20,9 +20,10 @@ body:
       label: Steps To Reproduce
       description: List the exact steps needed to reproduce the issue.
       placeholder: |
-        1. Open ...
-        2. Click ...
-        3. See ...
+        1. Start Wavee.
+        2. Press the configured recording hotkey.
+        3. Stop recording and wait for transcription.
+        4. Describe the incorrect result or error shown.
     validations:
       required: true
   - type: textarea
@@ -41,7 +42,7 @@ body:
     id: version
     attributes:
       label: Wavee Version Or Commit
-      placeholder: "v1.0.0 or commit SHA"
+      placeholder: "v1.0.0"
   - type: dropdown
     id: platform
     attributes:
@@ -49,7 +50,6 @@ body:
       options:
         - Windows
         - macOS
-        - Linux
   - type: textarea
     id: logs
     attributes:

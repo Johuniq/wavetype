@@ -1,5 +1,5 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "windows")]
 use std::time::Duration;
 
 pub struct TextInjector {
@@ -20,14 +20,7 @@ unsafe impl Sync for TextInjector {}
 
 impl TextInjector {
     pub fn new() -> Result<Self, String> {
-        // Platform-specific settings for fastest text injection
-        let settings = Settings {
-            // Linux: 0 delay for instant key events (X11/Wayland)
-            linux_delay: 0,
-            // Release modifier keys when dropped to prevent stuck keys
-            release_keys_when_dropped: true,
-            ..Settings::default()
-        };
+        let settings = Settings::default();
 
         let enigo =
             Enigo::new(&settings).map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
@@ -51,12 +44,9 @@ impl TextInjector {
             let _previous = cb.get_text().ok();
 
             if cb.set_text(text).is_ok() {
-                // Small delay to ensure clipboard is ready (platform-specific)
-                #[cfg(target_os = "linux")]
-                std::thread::sleep(Duration::from_micros(500)); // X11/Wayland sync
-
+                // Small delay to ensure clipboard is ready.
                 #[cfg(target_os = "windows")]
-                std::thread::sleep(Duration::from_micros(100)); // Windows is faster
+                std::thread::sleep(Duration::from_micros(100));
 
                 // Execute Paste shortcut
                 self.execute_paste()?;
@@ -110,23 +100,6 @@ impl TextInjector {
                 .map_err(|e| e.to_string())?;
         }
 
-        #[cfg(target_os = "linux")]
-        {
-            // Linux: Ctrl+V - works on X11 and most Wayland compositors
-            self.enigo
-                .key(Key::Control, Direction::Press)
-                .map_err(|e| e.to_string())?;
-            self.enigo
-                .key(Key::Unicode('v'), Direction::Click)
-                .map_err(|e| e.to_string())?;
-            self.enigo
-                .key(Key::Control, Direction::Release)
-                .map_err(|e| e.to_string())?;
-
-            // Additional sync delay for X11/Wayland
-            std::thread::sleep(Duration::from_micros(200));
-        }
-
         Ok(())
     }
 
@@ -149,7 +122,7 @@ impl TextInjector {
                 }
             }
             "redo" => {
-                // Ctrl+Y (Windows/Linux) or Cmd+Shift+Z (macOS)
+                // Ctrl+Y (Windows) or Cmd+Shift+Z (macOS)
                 #[cfg(target_os = "macos")]
                 {
                     self.enigo.key(Key::Meta, Direction::Press).ok();

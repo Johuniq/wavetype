@@ -26,7 +26,7 @@ fn save_license_persists_active_license_data() {
         license_key: Some("WVT-TEST-LICENSE".to_string()),
         activation_id: Some("activation_123".to_string()),
         status: "active".to_string(),
-        customer_email: Some("test@example.com".to_string()),
+        customer_email: Some("tester@wavee.test".to_string()),
         customer_name: Some("Test User".to_string()),
         expires_at: None,
         is_activated: true,
@@ -44,7 +44,7 @@ fn save_license_persists_active_license_data() {
     assert_eq!(stored.activation_id, license.activation_id);
     assert_eq!(stored.status, "active");
     assert!(stored.is_activated);
-    assert_eq!(stored.customer_email, Some("test@example.com".to_string()));
+    assert_eq!(stored.customer_email, Some("tester@wavee.test".to_string()));
     assert_eq!(stored.usage, 3);
     assert_eq!(stored.validations, 4);
 }
@@ -79,7 +79,7 @@ fn clear_license_preserves_trial_history_and_marks_expired() {
         license_key: Some("WVT-TEST-LICENSE".to_string()),
         activation_id: Some("activation_123".to_string()),
         status: "active".to_string(),
-        customer_email: Some("test@example.com".to_string()),
+        customer_email: Some("tester@wavee.test".to_string()),
         customer_name: None,
         expires_at: None,
         is_activated: true,

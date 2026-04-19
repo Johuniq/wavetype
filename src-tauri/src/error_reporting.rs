@@ -644,7 +644,7 @@ mod tests {
             "Connection failed",
         )
         .with_details("Timeout after 30s")
-        .with_context("url", "https://example.com");
+        .with_context("url", "https://github.com/johuniq/wavee");
 
         assert!(report.details.is_some());
         assert!(report.context.contains_key("url"));

@@ -197,7 +197,7 @@ async fn e2e_db_backed_license_recovers_after_cache_loss() {
         license_key: Some("db-key".to_string()),
         activation_id: Some("db-activation".to_string()),
         status: "active".to_string(),
-        customer_email: Some("db@example.com".to_string()),
+        customer_email: Some("db-customer@wavee.test".to_string()),
         customer_name: Some("DB User".to_string()),
         expires_at: None,
         is_activated: true,
@@ -223,7 +223,7 @@ async fn e2e_db_backed_license_recovers_after_cache_loss() {
             "customer_id": "cust_db",
             "customer": {
                 "id": "cust_db",
-                "email": "db@example.com",
+                "email": "db-customer@wavee.test",
                 "name": "DB User"
             },
             "benefit_id": "benefit_db",
@@ -301,7 +301,7 @@ async fn e2e_trial_to_license_activation_validation_and_deactivation() {
                 "customer_id": "cust_e2e",
                 "customer": {
                     "id": "cust_e2e",
-                    "email": "e2e@example.com",
+                    "email": "e2e-customer@wavee.test",
                     "name": "E2E User"
                 },
                 "benefit_id": "benefit_e2e",
@@ -326,7 +326,7 @@ async fn e2e_trial_to_license_activation_validation_and_deactivation() {
             "customer_id": "cust_e2e",
             "customer": {
                 "id": "cust_e2e",
-                "email": "e2e@example.com",
+                "email": "e2e-customer@wavee.test",
                 "name": "E2E User"
             },
             "benefit_id": "benefit_e2e",

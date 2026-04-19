@@ -362,8 +362,8 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
             </div>
             <ol className="text-sm text-foreground/70 space-y-2 list-decimal list-inside ml-1">
               <li>Click the upload area to select an audio file</li>
-              <li>Click "Transcribe" to convert speech to text</li>
-              <li>Copy the transcription or edit it as needed</li>
+              <li>Click "Transcribe" to turn the audio into clean text</li>
+              <li>Copy the text or edit it as needed</li>
             </ol>
             <p className="text-xs text-foreground/60 mt-4 p-3 rounded-xl bg-white/30 dark:bg-white/10">
               💡 For best results, use clear audio with minimal background

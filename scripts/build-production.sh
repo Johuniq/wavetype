@@ -42,6 +42,20 @@ print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
 }
 
+detect_host_platform() {
+    case "$(uname -s)" in
+        Darwin*)
+            echo "macos"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo "windows"
+            ;;
+        *)
+            echo "unsupported"
+            ;;
+    esac
+}
+
 # Parse arguments
 TARGET_PLATFORM=""
 SKIP_CHECKS=false
@@ -60,7 +74,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --platform <platform>  Build for specific platform (linux, windows, macos)"
+            echo "  --platform <platform>  Build for specific platform (windows, macos)"
             echo "  --skip-checks          Skip type checking and linting"
             echo "  --help                 Show this help message"
             exit 0
@@ -130,14 +144,11 @@ print_step "Step 6/7: Building Tauri application (this may take a while)..."
 if [ -n "$TARGET_PLATFORM" ]; then
     print_info "Building for platform: $TARGET_PLATFORM"
     case $TARGET_PLATFORM in
-        linux)
-            cargo tauri build --target x86_64-unknown-linux-gnu
-            ;;
         windows)
-            cargo tauri build --target x86_64-pc-windows-msvc
+            cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi
             ;;
         macos)
-            cargo tauri build --target x86_64-apple-darwin
+            cargo tauri build --target x86_64-apple-darwin --bundles dmg,app
             ;;
         *)
             print_error "Unknown platform: $TARGET_PLATFORM"
@@ -145,7 +156,19 @@ if [ -n "$TARGET_PLATFORM" ]; then
             ;;
     esac
 else
-    cargo tauri build
+    HOST_PLATFORM="$(detect_host_platform)"
+    case $HOST_PLATFORM in
+        windows)
+            cargo tauri build --bundles nsis,msi
+            ;;
+        macos)
+            cargo tauri build --bundles dmg,app
+            ;;
+        *)
+            print_error "This project only supports Windows and macOS builds."
+            exit 1
+            ;;
+    esac
 fi
 
 # Step 7: Display build results
@@ -162,9 +185,6 @@ if [ -d "src-tauri/target/release/bundle" ]; then
     
     # Find and list all installer files
     find src-tauri/target/release/bundle -type f \( \
-        -name "*.deb" -o \
-        -name "*.rpm" -o \
-        -name "*.AppImage" -o \
         -name "*.msi" -o \
         -name "*.exe" -o \
         -name "*.dmg" -o \
@@ -186,6 +206,5 @@ fi
 
 echo ""
 print_info "To install on this machine:"
-echo "   Linux (deb): sudo dpkg -i src-tauri/target/release/bundle/deb/*.deb"
-echo "   Linux (AppImage): chmod +x *.AppImage && ./*.AppImage"
+echo "   Windows and macOS installers are under src-tauri/target/release/bundle/"
 echo ""

@@ -1,6 +1,6 @@
 # Wavee - Complete Feature Documentation
 
-**Wavee** is a privacy-first desktop application for offline voice-to-text transcription. It enables users to record speech, transcribe it using local AI models, and inject the text directly into any application with advanced post-processing and keyboard automation.
+**Wavee** is a privacy-first desktop dictation layer that turns your voice into polished text at your cursor. It records speech, processes it with local AI models, and places the result directly into any application with post-processing and keyboard automation.
 
 ---
 
@@ -21,16 +21,16 @@
 
 ## Core Features
 
-### 1. **Local AI Transcription (Offline)**
+### 1. **Local AI Dictation (Offline)**
 - **No Cloud Uploads**: All audio processing happens locally on the user's device
 - **Privacy by Design**: Audio data never leaves the machine
 - **Powered by OpenAI Whisper**: Uses `whisper-rs` bindings for CPU-based inference
-- **Fast Inference**: Multi-threaded processing optimized for Windows, macOS, and Linux
+- **Fast Inference**: Multi-threaded processing optimized for Windows and macOS
 - **99+ Languages**: Supports automatic language detection or manual language selection
 
-### 2. **Universal Text Injection**
+### 2. **Voice To Cursor**
 - **Works Everywhere**: Inject transcribed text into any application (browsers, IDEs, chat apps, etc.)
-- **Cross-Platform**: Windows (SendInput API via Enigo), macOS (Keyboard events), Linux
+- **Cross-Platform**: Windows (SendInput API via Enigo) and macOS (Keyboard events)
 - **Multiple Input Methods**:
   - Direct text injection
   - Clipboard mode (copy to clipboard instead)
@@ -81,7 +81,6 @@
 - **Platform-Specific Optimizations**:
   - **Windows**: Uses all CPU cores, higher entropy threshold for speed
   - **macOS**: Capped at 8 threads, optimized for M1/M2 chips
-  - **Linux**: Adaptive threading
 
 ### Recording Indicator
 - **Visual Feedback**: Animated waveform during active recording
@@ -162,7 +161,7 @@ Users can customize hotkeys during setup or in settings:
 
 | Setting | Options | Default |
 |---------|---------|---------|
-| Recording Hotkey | Any key combination | `Alt+Shift+S` (Windows/Linux), `Cmd+Shift+S` (macOS) |
+| Recording Hotkey | Any key combination | `Alt+Shift+S` (Windows), `Cmd+Shift+S` (macOS) |
 | Recording Mode | Push-to-Talk / Toggle | Push-to-Talk |
 | Alternate Hotkey | Any key combination | `Alt+Shift+D` |
 
@@ -232,7 +231,6 @@ Every transcribed text is automatically saved with metadata:
 - **Database Location**:
   - Windows: `%APPDATA%/com.johuniq.Wavee/`
   - macOS: `~/Library/Application Support/com.johuniq.Wavee/`
-  - Linux: `~/.config/com.johuniq.Wavee/`
 - **SQLite Backend**: All data stored in local SQLite database
 - **Encryption**: Sensitive data encrypted with AES-256-GCM
 - **Backup**: Users can export/import settings and history
@@ -410,13 +408,6 @@ The application tracks errors across multiple categories:
 - **Entitlements**: Audio recording, accessibility (optional for text injection)
 - **Audio**: AVFoundation framework
 - **Text Injection**: Carbon Events API
-
-### Linux
-- **OS Support**: Ubuntu 20.04+, Fedora 32+, Debian 11+
-- **Architecture**: x86_64
-- **Installation**: AppImage, deb (Ubuntu/Debian), rpm (Fedora)
-- **Audio**: PulseAudio or ALSA
-- **Text Injection**: X11/Wayland support (via Enigo)
 
 ### Minimum System Requirements
 - **RAM**: 2 GB minimum, 4 GB recommended

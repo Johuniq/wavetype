@@ -673,7 +673,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               <Logo size="sm" />
             </div>
             <p className="text-xs text-foreground/60">
-             Private, Local Voice-to-Text for Desktop
+              Wave your voice into text at your cursor
             </p>
             <div className="h-px w-16 bg-border/50 my-3" />
             <p className="text-xs text-foreground/60">

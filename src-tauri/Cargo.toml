@@ -106,11 +106,6 @@ transcribe-rs = { version = "0.3.11", features = ["onnx", "ort-directml"] }
 whisper-rs = { version = "0.16", features = ["metal"] }
 transcribe-rs = { version = "0.3.11", features = ["onnx", "ort-coreml"] }
 
-# Linux: CUDA support for NVIDIA GPUs (optional, falls back to CPU if unavailable)
-# Note: Requires CUDA toolkit installed. Comment out if not using NVIDIA GPU.
-# [target.'cfg(target_os = "linux")'.dependencies]
-# whisper-rs = { version = "0.16", features = ["cuda"] }
-
 # Windows: CUDA support (optional)
 # [target.'cfg(target_os = "windows")'.dependencies]
 # whisper-rs = { version = "0.16", features = ["cuda"] }

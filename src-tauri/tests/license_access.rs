@@ -5,7 +5,7 @@ fn active_license() -> database::LicenseData {
         license_key: Some("WVT-TEST-LICENSE".to_string()),
         activation_id: Some("activation_123".to_string()),
         status: "active".to_string(),
-        customer_email: Some("test@example.com".to_string()),
+        customer_email: Some("tester@wavee.test".to_string()),
         customer_name: Some("Test User".to_string()),
         expires_at: None,
         is_activated: true,

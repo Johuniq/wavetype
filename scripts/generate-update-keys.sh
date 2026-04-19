@@ -64,8 +64,8 @@ if [ -f "$KEYS_DIR/wavee.key.pub" ]; then
 fi
 
 echo "Next steps:"
-echo "   1. Copy the public key above into tauri.conf.json:"
-echo '      "updater": { "pubkey": "YOUR_PUBLIC_KEY_HERE" }'
+echo "   1. Replace the updater public key in src-tauri/tauri.conf.json with the public key above."
+echo '      Current key path: plugins.updater.pubkey'
 echo ""
 echo "   2. Add these GitHub secrets for CI/CD:"
 echo "      - TAURI_SIGNING_PRIVATE_KEY: contents of $KEYS_DIR/wavee.key"

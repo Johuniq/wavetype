@@ -6,7 +6,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { isPlatformFree } from "@/lib/license-api";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +31,6 @@ import {
   Clock,
   Cpu,
   FileAudio,
-  Heart,
   HelpCircle,
   History,
   Key,
@@ -40,7 +38,6 @@ import {
   Menu,
   Mic,
   Settings,
-  ShieldCheck,
 } from "lucide-react";
 import {
   lazy,
@@ -109,7 +106,6 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   const [showTranscribe, setShowTranscribe] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
   const [showHelpSupport, setShowHelpSupport] = useState(false);
-  const [isLinuxFree, setIsLinuxFree] = useState(false);
 
   // Refs to track recording state for hotkey handlers
   const recordingStatusRef = useRef(recordingStatus);
@@ -137,11 +133,6 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   useEffect(() => {
     setIsModelLoaded(false);
   }, [selectedModel?.id, selectedModel?.downloaded, settings.language]);
-
-  // Check if user is on Linux (free tier)
-  useEffect(() => {
-    isPlatformFree().then(setIsLinuxFree).catch(console.error);
-  }, []);
 
   const currentHotkey =
     settings.hotkeyMode === "push-to-talk"
@@ -636,15 +627,13 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
               <Cpu className="h-4 w-4 text-foreground/70" />
               Models
             </DropdownMenuItem>
-            {!isLinuxFree && (
-              <DropdownMenuItem
-                className="cursor-pointer rounded-lg"
-                onSelect={() => setShowLicense(true)}
-              >
-                <Key className="h-4 w-4 text-foreground/70" />
-                License
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowLicense(true)}
+            >
+              <Key className="h-4 w-4 text-foreground/70" />
+              License
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer rounded-lg"
               onSelect={() => setShowSettings(true)}
@@ -663,43 +652,26 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         </DropdownMenu>
       </div>
 
-      {/* Linux Free Tier Banner */}
-      {isLinuxFree && (
+      {/* Trial banner */}
+      {trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
         <div className="relative z-10 mx-6 mt-4 shrink-0">
-          <div className="glass-card px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
+          <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <Heart className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <span className="text-xs font-medium text-green-700 dark:text-green-300">
-                Free Forever on Linux! 🐧
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Trial: {trialDaysRemaining} day
+                {trialDaysRemaining !== 1 ? "s" : ""} remaining
               </span>
             </div>
-            <ShieldCheck className="h-4 w-4 text-green-500" />
+            <button
+              className="glass-button px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+              onClick={() => setShowLicense(true)}
+            >
+              Upgrade
+            </button>
           </div>
         </div>
       )}
-
-      {/* Trial banner */}
-      {!isLinuxFree &&
-        trialDaysRemaining !== undefined &&
-        trialDaysRemaining > 0 && (
-          <div className="relative z-10 mx-6 mt-4 shrink-0">
-            <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                  Trial: {trialDaysRemaining} day
-                  {trialDaysRemaining !== 1 ? "s" : ""} remaining
-                </span>
-              </div>
-              <button
-                className="glass-button px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-                onClick={() => setShowLicense(true)}
-              >
-                Upgrade
-              </button>
-            </div>
-          </div>
-        )}
 
       {/* Main content */}
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 py-6 scrollable">

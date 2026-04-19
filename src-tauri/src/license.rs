@@ -328,16 +328,6 @@ pub fn get_device_id() -> String {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        // Get Linux machine-id
-        if let Ok(id) = std::fs::read_to_string("/etc/machine-id") {
-            hasher.update(id.trim().as_bytes());
-        } else if let Ok(id) = std::fs::read_to_string("/var/lib/dbus/machine-id") {
-            hasher.update(id.trim().as_bytes());
-        }
-    }
-
     // Create readable device ID with prefix
     let hash = hasher.finalize();
     format!("WVT-{}", hex::encode(&hash[..12]).to_uppercase())
@@ -352,7 +342,6 @@ pub fn get_device_label() -> String {
     let os = match std::env::consts::OS {
         "macos" => "macOS",
         "windows" => "Windows",
-        "linux" => "Linux",
         other => other,
     };
 

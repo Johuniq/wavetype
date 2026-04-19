@@ -9,8 +9,8 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
   const features = [
     {
       icon: Mic,
-      title: "Voice Input",
-      description: "Natural speech to text",
+      title: "Voice to Cursor",
+      description: "Speak and place text",
     },
     {
       icon: Keyboard,
@@ -39,7 +39,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           <Logo size="lg" />
 
           <p className="mt-3 text-foreground/60 text-center text-sm">
-            Type anywhere with your voice
+            Wave your voice into text anywhere
           </p>
 
           <div className="grid grid-cols-2 gap-3 mt-8 w-full">

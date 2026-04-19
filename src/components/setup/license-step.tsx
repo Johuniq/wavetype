@@ -302,7 +302,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                     <input
                       id="license-key"
                       type="text"
-                      placeholder="XXXX-XXXX-XXXX-XXXX"
+                      placeholder="Paste your Wavee license key"
                       value={licenseKey}
                       onChange={(e) => setLicenseKey(e.target.value)}
                       disabled={isActivating}

@@ -39,7 +39,7 @@ fn database_state_survives_reopen() {
             license_key: Some("WVT-PERSIST".to_string()),
             activation_id: Some("activation_persist".to_string()),
             status: "active".to_string(),
-            customer_email: Some("persist@example.com".to_string()),
+            customer_email: Some("persistence-customer@wavee.test".to_string()),
             customer_name: Some("Persist User".to_string()),
             expires_at: None,
             is_activated: true,

@@ -2,7 +2,7 @@
   "name": "wavee",
   "private": false,
   "version": "1.0.0",
-  "description": "Open-source desktop voice-to-text app with local AI transcription",
+  "description": "Open-source desktop dictation app that turns your voice into text at your cursor",
   "author": "Johuniq",
   "license": "MIT",
   "homepage": "https://github.com/johuniq/wavee#readme",
